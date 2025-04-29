@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "754829269173",
+    "project_id": "eat-ease-ed6aa",
+    "storage_bucket": "eat-ease-ed6aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:754829269173:android:1e8d0f00df4136793986fc",
+        "android_client_info": {
+          "package_name": "com.example.eatease"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2otloSpj6EKgTU2040JHXKKJ2OzODc6g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

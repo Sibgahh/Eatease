@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Function to check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Function to check if the user is accessing their own data
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Function to check if the user is an admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Function to check if the user is a merchant
+    function isMerchant() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'merchant';
+    }
+    
+    // Function to check if the user is the owner of a restaurant
+    function isRestaurantOwner(restaurantId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+        get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
+    }
+    
+    // Users collection rules
+    match /users/{userId} {
+      // Anyone can read public user data
+      allow read: if isAuthenticated();
+      
+      // Users can only write their own data, admins can write all user data
+      allow write: if isOwner(userId) || isAdmin();
+      
+      // Only admins can delete user data
+      allow delete: if isAdmin();
+    }
+    
+    // Restaurants collection rules
+    match /restaurants/{restaurantId} {
+      // Anyone can read restaurant data
+      allow read: if true;
+      
+      // Only merchants and admins can create restaurants
+      allow create: if isMerchant() || isAdmin();
+      
+      // Only the restaurant owner or admins can update or delete restaurants
+      allow update, delete: if isRestaurantOwner(restaurantId) || isAdmin();
+      
+      // Food items subcollection rules
+      match /foodItems/{foodItemId} {
+        // Anyone can read food items
+        allow read: if true;
+        
+        // Only the restaurant owner or admins can create, update, or delete food items
+        allow write: if isRestaurantOwner(restaurantId) || isAdmin();
+      }
+    }
+    
+    // Sales collection rules
+    match /sales/{saleId} {
+      // Customers can read their own sales, merchants can read sales for their restaurants, admins can read all
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == resource.data.customerId || 
+         (isMerchant() && resource.data.sellerId == request.auth.uid) || 
+         isAdmin());
+         
+      // Only authenticated users can create sales
+      allow create: if isAuthenticated();
+      
+      // Only admins and the original seller can update sales
+      allow update: if isAdmin() || (isMerchant() && resource.data.sellerId == request.auth.uid);
+      
+      // Only admins can delete sales
+      allow delete: if isAdmin();
+    }
+    
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
