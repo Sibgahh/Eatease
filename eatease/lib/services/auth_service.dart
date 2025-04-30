@@ -248,6 +248,26 @@ class AuthService {
     }
   }
 
+  // Get current user role
+  Future<String> getUserRole() async {
+    if (currentUser == null) {
+      return 'customer'; // Default to customer if no user is logged in
+    }
+    
+    try {
+      final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
+      if (!userDoc.exists) {
+        return 'customer';
+      }
+      
+      final userData = UserModel.fromMap(userDoc.data()!, userDoc.id);
+      return userData.role;
+    } catch (e) {
+      print('Error getting user role: $e');
+      return 'customer';
+    }
+  }
+
   // Check if user is merchant
   Future<bool> isMerchant() async {
     if (currentUser == null) {

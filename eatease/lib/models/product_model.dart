@@ -65,8 +65,8 @@ class ProductModel {
       'tags': tags,
       'nutritionInfo': nutritionInfo,
       'customizations': customizations,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
   }
 

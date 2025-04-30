@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/auth_service.dart';
+import '../../services/auth/auth_service.dart';
 import 'user_management_screen.dart';
+import '../../widgets/bottom_nav_bar.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -189,6 +190,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ],
               ),
             ),
+      bottomNavigationBar: FutureBuilder<String>(
+        future: _authService.getUserRole(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox();
+          }
+          
+          final userRole = snapshot.data ?? 'admin';
+          return BottomNavBar(
+            currentIndex: 0,
+            userRole: userRole,
+          );
+        },
+      ),
     );
   }
 

@@ -16,6 +16,7 @@ import 'screens/customer/customer_home_screen.dart';
 import 'screens/merchant/merchant_home_screen.dart';
 import 'screens/merchant/product_list_screen.dart';
 import 'screens/merchant/product_form_screen.dart';
+import 'screens/merchant/merchant_settings_screen.dart';
 
 // Shared Components 
 import 'screens/shared/auth_wrapper.dart';
@@ -37,6 +38,7 @@ class AppRoutes {
   static const String merchantProducts = '/merchant/products';
   static const String merchantProductsAdd = '/merchant/products/add';
   static const String merchantProductsEdit = '/merchant/products/edit';
+  static const String merchantSettings = '/merchant/settings';
   
   // Admin Routes
   static const String admin = '/admin';
@@ -90,6 +92,7 @@ final Map<String, WidgetBuilder> appRoutes = {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Add Product Form (${AppRoutes.merchantProductsAdd})');
     return const ProductFormScreen();
   },
+  AppRoutes.merchantSettings: (context) => const MerchantSettingsScreen(),
   
   // Admin Routes
   AppRoutes.admin: (context) {

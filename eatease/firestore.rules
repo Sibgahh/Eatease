@@ -66,6 +66,20 @@ service cloud.firestore {
       }
     }
     
+    // Products collection rules
+    match /products/{productId} {
+      // Anyone can read products
+      allow read: if true;
+      
+      // Only merchants and admins can create products
+      allow create: if isAuthenticated() && 
+        (isMerchant() || isAdmin());
+      
+      // Only the product owner (merchant) or admins can update or delete products
+      allow update, delete: if isAuthenticated() && 
+        ((isMerchant() && request.auth.uid == resource.data.merchantId) || isAdmin());
+    }
+    
     // Sales collection rules
     match /sales/{saleId} {
       // Customers can read their own sales, merchants can read sales for their restaurants, admins can read all

@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import '../../models/user/user_model.dart';
+import '../../models/merchant_model.dart';
 
 class AuthService {
   final auth.FirebaseAuth _auth = auth.FirebaseAuth.instance;
@@ -248,6 +250,26 @@ class AuthService {
     }
   }
 
+  // Get current user role
+  Future<String> getUserRole() async {
+    if (currentUser == null) {
+      return 'customer'; // Default to customer if no user is logged in
+    }
+    
+    try {
+      final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
+      if (!userDoc.exists) {
+        return 'customer';
+      }
+      
+      final userData = UserModel.fromMap(userDoc.data()!, userDoc.id);
+      return userData.role;
+    } catch (e) {
+      print('Error getting user role: $e');
+      return 'customer';
+    }
+  }
+
   // Check if user is merchant
   Future<bool> isMerchant() async {
     if (currentUser == null) {
@@ -264,6 +286,74 @@ class AuthService {
       return userData.isMerchant();
     } catch (e) {
       print('Error checking merchant status: $e');
+      return false;
+    }
+  }
+
+  // Get merchant model for the current user
+  Future<MerchantModel?> getCurrentMerchantModel() async {
+    if (currentUser == null) {
+      return null;
+    }
+    
+    try {
+      final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
+      if (!userDoc.exists) {
+        return null;
+      }
+      
+      final userData = userDoc.data()!;
+      if (userData['role'] != 'merchant') {
+        return null;
+      }
+      
+      return MerchantModel.fromMap(userData, userDoc.id);
+    } catch (e) {
+      print('Error getting merchant model: $e');
+      return null;
+    }
+  }
+  
+  // Update merchant store information
+  Future<bool> updateMerchantStore({
+    required String storeName,
+    String? storeDescription,
+    String? storeAddress,
+    String? phoneNumber,
+  }) async {
+    if (currentUser == null) {
+      return false;
+    }
+    
+    try {
+      final userRef = _firestore.collection('users').doc(currentUser!.uid);
+      final userDoc = await userRef.get();
+      
+      if (!userDoc.exists) {
+        return false;
+      }
+      
+      final updateData = <String, dynamic>{
+        'storeName': storeName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      if (storeDescription != null) {
+        updateData['storeDescription'] = storeDescription;
+      }
+      
+      if (storeAddress != null) {
+        updateData['storeAddress'] = storeAddress;
+      }
+      
+      if (phoneNumber != null) {
+        updateData['phoneNumber'] = phoneNumber;
+      }
+      
+      await userRef.update(updateData);
+      return true;
+    } catch (e) {
+      print('Error updating merchant store: $e');
       return false;
     }
   }

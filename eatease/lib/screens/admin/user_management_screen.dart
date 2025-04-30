@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user_model.dart';
-import '../../services/auth_service.dart';
+import '../../services/auth/auth_service.dart';
+import '../../widgets/bottom_nav_bar.dart';
+import '../../utils/string_extensions.dart';
 import 'add_user_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
@@ -29,6 +31,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             child: _buildUserList(),
           ),
         ],
+      ),
+      bottomNavigationBar: FutureBuilder<String>(
+        future: _authService.getUserRole(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox();
+          }
+          
+          final userRole = snapshot.data ?? 'admin';
+          return BottomNavBar(
+            currentIndex: 1, // Users section is selected
+            userRole: userRole,
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -281,15 +297,5 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ),
       );
     }
-  }
-}
-
-// Extension to capitalize the first letter of a string
-extension StringExtension on String {
-  String charAt(int index) {
-    if (isEmpty || index < 0 || index >= length) {
-      return '';
-    }
-    return this[index];
   }
 } 

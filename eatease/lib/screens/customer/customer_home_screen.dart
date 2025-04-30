@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/product_service.dart';
 import '../../models/product_model.dart';
+import '../../widgets/bottom_nav_bar.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -250,15 +251,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const Spacer(),
-                    TextButton.icon(
+                    TextButton(
                       onPressed: () {
-                        Navigator.pushNamed(context, '/admin');
+                        Navigator.pushReplacementNamed(context, '/admin');
                       },
-                      icon: const Icon(Icons.dashboard),
-                      label: const Text('Dashboard'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.amber,
-                      ),
+                      child: const Text('Back to Admin'),
                     ),
                   ],
                 ),
@@ -267,18 +264,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
         ],
       ),
-      
-      // Shopping Cart FAB
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Shopping cart feature coming soon!'),
-            ),
+      bottomNavigationBar: FutureBuilder<String>(
+        future: _authService.getUserRole(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox();
+          }
+          
+          final userRole = snapshot.data ?? 'customer';
+          return BottomNavBar(
+            currentIndex: 0,
+            userRole: userRole,
           );
         },
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.shopping_cart),
       ),
     );
   }

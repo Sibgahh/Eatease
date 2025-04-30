@@ -46,7 +46,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '754829269173',
     projectId: 'eat-ease-ed6aa',
     authDomain: 'eat-ease-ed6aa.firebaseapp.com',
-    storageBucket: 'eat-ease-ed6aa.firebasestorage.app',
+    storageBucket: 'eat-ease-ed6aa.appspot.com',
     measurementId: 'G-7BVB8JQSLM',
   );
 
@@ -55,7 +55,7 @@ class DefaultFirebaseOptions {
     appId: '1:754829269173:android:1e8d0f00df4136793986fc',
     messagingSenderId: '754829269173',
     projectId: 'eat-ease-ed6aa',
-    storageBucket: 'eat-ease-ed6aa.firebasestorage.app',
+    storageBucket: 'eat-ease-ed6aa.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     appId: '1:754829269173:ios:40fc51e73a5dddf63986fc',
     messagingSenderId: '754829269173',
     projectId: 'eat-ease-ed6aa',
-    storageBucket: 'eat-ease-ed6aa.firebasestorage.app',
+    storageBucket: 'eat-ease-ed6aa.appspot.com',
     iosBundleId: 'com.example.eatease',
   );
 
@@ -72,7 +72,7 @@ class DefaultFirebaseOptions {
     appId: '1:754829269173:ios:40fc51e73a5dddf63986fc',
     messagingSenderId: '754829269173',
     projectId: 'eat-ease-ed6aa',
-    storageBucket: 'eat-ease-ed6aa.firebasestorage.app',
+    storageBucket: 'eat-ease-ed6aa.appspot.com',
     iosBundleId: 'com.example.eatease',
   );
 
@@ -82,7 +82,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '754829269173',
     projectId: 'eat-ease-ed6aa',
     authDomain: 'eat-ease-ed6aa.firebaseapp.com',
-    storageBucket: 'eat-ease-ed6aa.firebasestorage.app',
+    storageBucket: 'eat-ease-ed6aa.appspot.com',
     measurementId: 'G-HFR5JDRYVB',
   );
 }
