@@ -51,6 +51,8 @@ dependencies:
   google_fonts: ^6.1.0
   flutter_image_compress: ^2.1.0
   path_provider: ^2.1.2
+  cloud_functions: ^5.5.0
+  flutter_animate: ^4.5.2
 
 dev_dependencies:
   flutter_test:

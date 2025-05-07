@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../routes.dart';
 import '../services/auth/auth_service.dart';
+import '../screens/customer/cart_screen.dart';
+import '../screens/customer/profile_screen.dart';
+import '../screens/customer/customer_home_screen.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -25,6 +28,34 @@ class BottomNavBar extends StatelessWidget {
     
     // Default to customer bottom nav if role is unknown
     return _buildCustomerBottomNav(context);
+  }
+
+  // Helper method to navigate between main tabs
+  void _navigateToMainTab(BuildContext context, String routeName) {
+    // Get the current route name
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    
+    // If we're already on this route, do nothing
+    if (currentRoute == routeName) return;
+    
+    // Check if we're on one of the main tabs
+    final isOnMainTab = [
+      AppRoutes.customer,
+      AppRoutes.customerProfile,
+      // Add other main customer routes here if needed
+    ].contains(currentRoute);
+    
+    if (isOnMainTab) {
+      // If we're on a main tab, use pushReplacementNamed to avoid stacking
+      Navigator.pushReplacementNamed(context, routeName);
+    } else {
+      // If we're on a sub-screen, clear everything back to the main tab
+      Navigator.pushNamedAndRemoveUntil(
+        context, 
+        routeName,
+        (route) => false,
+      );
+    }
   }
 
   Widget _buildCustomerBottomNav(BuildContext context) {
@@ -63,19 +94,22 @@ class BottomNavBar extends StatelessWidget {
             
             switch (index) {
               case 0:
-                Navigator.pushReplacementNamed(context, AppRoutes.customer);
+                // Direct navigation to home screen
+                print('[NAVIGATION] Directly navigating to Home using MaterialPageRoute');
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CustomerHomeScreen(),
+                    settings: const RouteSettings(name: AppRoutes.customer),
+                  ),
+                  (route) => false, // Clear all other routes
+                );
                 break;
               case 1:
                 // Navigate to cart
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Cart coming soon!'),
-                    backgroundColor: Colors.green.shade600,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CartScreen()),
                 );
                 break;
               case 2:
@@ -92,16 +126,15 @@ class BottomNavBar extends StatelessWidget {
                 );
                 break;
               case 3:
-                // Navigate to profile
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Profile coming soon!'),
-                    backgroundColor: Colors.green.shade600,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                // Direct navigation to profile screen
+                print('[NAVIGATION] Directly navigating to Profile using MaterialPageRoute');
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CustomerProfileScreen(),
+                    settings: const RouteSettings(name: AppRoutes.customerProfile),
                   ),
+                  (route) => false, // Clear all other routes
                 );
                 break;
             }
@@ -160,16 +193,7 @@ class BottomNavBar extends StatelessWidget {
                 break;
               case 2:
                 // Navigate to orders
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Orders feature coming soon!'),
-                    backgroundColor: Colors.blue.shade600,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                );
+                Navigator.pushReplacementNamed(context, AppRoutes.merchantOrders);
                 break;
               case 3:
                 // Navigate to settings

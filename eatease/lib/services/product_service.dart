@@ -40,6 +40,18 @@ class ProductService {
       });
   }
 
+  // Get all products for a specific merchant
+  Stream<List<ProductModel>> getMerchantProductsByMerchantId(String merchantId) {
+    return _products
+      .where('merchantId', isEqualTo: merchantId)
+      .snapshots()
+      .map((snapshot) {
+        return snapshot.docs.map((doc) {
+          return ProductModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        }).toList();
+      });
+  }
+
   // Get a single product by ID
   Future<ProductModel?> getProductById(String productId) async {
     try {
@@ -481,9 +493,11 @@ class ProductService {
     try {
       print('Adding product: ${product.name} for merchant: $currentMerchantId');
       
+      // Ensure imageUrls is not null
       final productData = product.copyWith(
         merchantId: currentMerchantId,
         createdAt: DateTime.now(),
+        imageUrls: product.imageUrls.isEmpty ? [] : product.imageUrls,
       ).toMap();
       
       print('Product data prepared: ${productData.toString()}');
@@ -529,6 +543,7 @@ class ProductService {
       
       final productData = product.copyWith(
         updatedAt: DateTime.now(),
+        imageUrls: product.imageUrls.isEmpty ? [] : product.imageUrls,
       ).toMap();
       
       // Use server timestamp for updatedAt to avoid any DateTime serialization issues

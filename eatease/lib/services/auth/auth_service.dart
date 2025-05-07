@@ -357,4 +357,24 @@ class AuthService {
       return false;
     }
   }
+
+  // Get current user's display name
+  Future<String?> getCurrentUserName() async {
+    if (currentUser == null) {
+      return null;
+    }
+    
+    try {
+      final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
+      if (!userDoc.exists) {
+        return currentUser!.displayName;
+      }
+      
+      final userData = userDoc.data()!;
+      return userData['displayName'] as String? ?? currentUser!.displayName;
+    } catch (e) {
+      print('Error getting user name: $e');
+      return currentUser!.displayName;
+    }
+  }
 } 

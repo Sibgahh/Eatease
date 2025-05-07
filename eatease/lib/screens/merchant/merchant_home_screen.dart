@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/sales_service.dart';
 import '../../models/merchant_model.dart';
+import '../../models/order_model.dart';
 import '../../utils/app_theme.dart';
 import 'product_list_screen.dart';
 import 'merchant_settings_screen.dart';
@@ -24,6 +25,18 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   bool _isStoreConfigured = false;
   String _merchantName = 'Merchant';
   
+  // Currency formatter for Rupiah
+  final NumberFormat rupiahFormat = NumberFormat.currency(
+    locale: 'id_ID',
+    symbol: 'Rp ',
+    decimalDigits: 0,
+  );
+  
+  // Utility method to format currency in Rupiah
+  String formatRupiah(double amount) {
+    return rupiahFormat.format(amount);
+  }
+  
   // Sales statistics
   Map<String, dynamic> _salesStats = {
     'totalSales': 0.0,
@@ -36,6 +49,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   // Chart data
   List<Map<String, dynamic>> _salesData = [];
   List<Map<String, dynamic>> _topProducts = [];
+  
+  // Latest transactions
+  List<OrderModel> _latestTransactions = [];
+  
+  // Rating data
+  double _rating = 4.7;
+  int _reviewCount = 128;
   
   @override
   void initState() {
@@ -76,12 +96,14 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       final salesStats = await _salesService.getMerchantSalesStats();
       final salesData = await _salesService.getMerchantSalesSummaryByDay();
       final topProducts = await _salesService.getTopSellingProducts();
+      final latestTransactions = await _salesService.getLatestTransactions();
       
       if (mounted) {
         setState(() {
           _salesStats = salesStats;
           _salesData = salesData;
           _topProducts = topProducts;
+          _latestTransactions = latestTransactions;
         });
       }
     } catch (e) {
@@ -99,14 +121,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'EatEase Merchant',
-            style: AppTheme.headingSmall(color: Colors.white),
-          ),
-          backgroundColor: AppTheme.primaryColor,
-          elevation: 0,
-        ),
+        appBar: _buildAppBar(),
         body: const Center(
           child: CircularProgressIndicator(),
         ),
@@ -114,51 +129,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     }
     
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'EatEase Merchant',
-          style: AppTheme.headingSmall(color: Colors.white),
-        ),
-        backgroundColor: AppTheme.primaryColor,
-        elevation: 2,
-        actions: [
-          // Admin Panel Button (only visible to admins)
-          FutureBuilder<bool>(
-            future: _authService.isAdmin(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
-                return const SizedBox();
-              }
-              
-              return IconButton(
-                icon: const Icon(Icons.admin_panel_settings),
-                onPressed: () {
-                  Navigator.pushNamed(context, '/admin');
-                },
-                tooltip: 'Admin Dashboard',
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-            tooltip: 'Refresh Data',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await _authService.signOut();
-              if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/',
-                  (route) => false,
-                );
-              }
-            },
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(),
       body: RefreshIndicator(
         onRefresh: _loadData,
         child: SingleChildScrollView(
@@ -166,36 +137,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with gradient
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 30, 20, 30),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [AppTheme.primaryColor, AppTheme.primaryColor.withOpacity(0.8)],
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
-                  ),
-                  boxShadow: AppTheme.getShadow(),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome, $_merchantName!',
-                      style: AppTheme.headingLarge(color: Colors.white),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Manage your restaurant and track performance',
-                      style: AppTheme.bodyMedium(color: Colors.white.withOpacity(0.9)),
-                    ),
-                  ],
-                ),
+              // Header as Card
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: _buildHeaderCard(),
               ),
               
               Padding(
@@ -207,67 +152,12 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     if (!_isStoreConfigured)
                       _buildSetupReminder(),
                       
-                    // Today's Stats Cards
+                    // Performance Summary Card
                     const SizedBox(height: 16),
-                    Text('Today\'s Performance', style: AppTheme.headingMedium()),
+                    Text('Performance Summary', style: AppTheme.headingMedium()),
                     const SizedBox(height: 12),
                     
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            'Today\'s Sales',
-                            '\$${_salesStats['todaySales'].toStringAsFixed(2)}',
-                            Icons.attach_money,
-                            AppTheme.primaryColor,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildStatCard(
-                            'Today\'s Orders',
-                            _salesStats['todayOrders'].toString(),
-                            Icons.shopping_bag,
-                            AppTheme.accentColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    // Overall Performance Stats
-                    const SizedBox(height: 24),
-                    Text('Overall Performance', style: AppTheme.headingMedium()),
-                    const SizedBox(height: 12),
-                    
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            'Total Sales',
-                            '\$${_salesStats['totalSales'].toStringAsFixed(2)}',
-                            Icons.payments,
-                            AppTheme.successColor,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildStatCard(
-                            'Total Orders',
-                            _salesStats['totalOrders'].toString(),
-                            Icons.receipt_long,
-                            Colors.purple,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    _buildStatCard(
-                      'Average Order Value',
-                      '\$${_salesStats['averageOrder'].toStringAsFixed(2)}',
-                      Icons.trending_up,
-                      Colors.teal,
-                    ),
+                    _buildPerformanceCard(),
                     
                     // Sales Chart
                     const SizedBox(height: 24),
@@ -281,11 +171,11 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     const SizedBox(height: 12),
                     _buildTopProductsList(),
                     
-                    // Quick Actions
+                    // Latest Transactions
                     const SizedBox(height: 24),
-                    Text('Quick Actions', style: AppTheme.headingMedium()),
+                    Text('Latest Transactions', style: AppTheme.headingMedium()),
                     const SizedBox(height: 12),
-                    _buildQuickActions(),
+                    _buildLatestTransactions(),
                   ],
                 ),
               ),
@@ -306,6 +196,195 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             userRole: userRole,
           );
         },
+      ),
+    );
+  }
+  
+  // New method for the redesigned AppBar
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: Colors.white,
+      foregroundColor: AppTheme.textPrimaryColor,
+      centerTitle: false,
+      title: Row(
+        children: [
+          Image.asset(
+            'assets/images/logo.png', 
+            height: 32,
+            errorBuilder: (ctx, obj, st) => Icon(
+              Icons.restaurant, 
+              color: AppTheme.primaryColor,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+          'EatEase Merchant',
+            style: AppTheme.headingSmall(color: AppTheme.textPrimaryColor),
+        ),
+        ],
+      ),
+        actions: [
+          // Admin Panel Button (only visible to admins)
+          FutureBuilder<bool>(
+            future: _authService.isAdmin(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
+                return const SizedBox();
+              }
+              
+              return IconButton(
+              icon: Icon(
+                Icons.admin_panel_settings,
+                color: AppTheme.primaryColor,
+              ),
+                onPressed: () {
+                  Navigator.pushNamed(context, '/admin');
+                },
+                tooltip: 'Admin Dashboard',
+              );
+            },
+          ),
+      ],
+    );
+  }
+  
+  // New method for the header card
+  Widget _buildHeaderCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.primaryColor,
+                      Color(0xFF2E7D32), // Darker shade for depth
+                    ],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    // Background pattern
+                    Positioned(
+              right: -30,
+              top: -30,
+                      child: Container(
+                        width: 150,
+                        height: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+              left: -40,
+              bottom: -40,
+                      child: Container(
+                width: 150,
+                height: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    // Content
+                    Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Avatar or icon
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Icon(
+                        Icons.store,
+                                size: 30,
+                                color: AppTheme.primaryColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          // Welcome text
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Welcome back,',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _merchantName,
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    // Rating stars
+                                    _buildRatingStars(_rating),
+                                    const SizedBox(width: 8),
+                                    // Rating text
+                                    Text(
+                                      '$_rating',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '($_reviewCount)',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
       ),
     );
   }
@@ -363,31 +442,172 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     );
   }
   
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  // New combined performance card
+  Widget _buildPerformanceCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            offset: const Offset(0, 1),
+            blurRadius: 4,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Today's performance row
+            Row(
+              children: [
+                // Today's sales
+                Expanded(
+                  child: _buildCompactStat(
+                    AppTheme.primaryColor,
+                    _salesStats['todaySales'] > 0 
+                      ? formatRupiah(_salesStats['todaySales'])
+                      : 'Rp 0',
+                    "Today's Sales",
+                    Icons.payments_outlined,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Today's orders
+                Expanded(
+                  child: _buildCompactStat(
+                    AppTheme.accentColor,
+                    '${_salesStats['todayOrders']}',
+                    "Today's Orders",
+                    Icons.shopping_bag_outlined,
+                  ),
+                ),
+              ],
+            ),
+            
+            // Spacer
+            const SizedBox(height: 16),
+            
+            // Total sales & orders row
+            Row(
+              children: [
+                // Total sales
+                Expanded(
+                  child: _buildCompactStat(
+                    AppTheme.successColor,
+                    _salesStats['totalSales'] > 0 
+                      ? formatRupiah(_salesStats['totalSales'])
+                      : 'Rp 0',
+                    "Total Sales",
+                    Icons.bar_chart,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Total orders
+                Expanded(
+                  child: _buildCompactStat(
+                    Colors.deepPurple,
+                    '${_salesStats['totalOrders']}',
+                    "Total Orders",
+                    Icons.receipt_outlined,
+                  ),
+                ),
+              ],
+            ),
+            
+            // Spacer
+            const SizedBox(height: 16),
+            
+            // Average value banner
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.trending_up,
+                    color: Colors.teal,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Average Order Value:",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.teal.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _salesStats['averageOrder'] > 0 
+                      ? formatRupiah(_salesStats['averageOrder'])
+                      : 'Rp 0',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Ultra compact stat widget with value emphasis
+  Widget _buildCompactStat(Color color, String value, String title, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: AppTheme.getShadow(opacity: 0.1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 24),
+              Icon(
+                icon,
+                color: color,
+                size: 20,
+              ),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondaryColor.withOpacity(0.7),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             value,
-            style: AppTheme.headingMedium(color: color),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -395,25 +615,158 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   }
   
   Widget _buildSalesChart() {
+    // Generate sample dates for the past 7 days if no sales data available
     if (_salesData.isEmpty) {
+      List<FlSpot> emptySpots = [];
+      List<String> sampleDates = [];
+      
+      // Generate dates for the last 7 days
+      final DateTime now = DateTime.now();
+      for (int i = 6; i >= 0; i--) {
+        final date = now.subtract(Duration(days: i));
+        final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+        
+        // Add zero sales data point
+        emptySpots.add(FlSpot((6 - i).toDouble(), 0));
+        // Add formatted date for display
+        sampleDates.add(_formatChartDate(formattedDate));
+      }
+      
       return Container(
-        height: 200,
+        height: 240,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: AppTheme.getShadow(opacity: 0.1),
         ),
-        child: Center(
-          child: Text(
-            'No sales data available',
-            style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
-          ),
+        child: Column(
+          children: [
+            Expanded(
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 500,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: AppTheme.dividerColor.withOpacity(0.2),
+                        strokeWidth: 0.5,
+                      );
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 24,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          final int index = value.toInt();
+                          if (index < 0 || index >= sampleDates.length) {
+                            return const SizedBox();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 5.0),
+                            child: Text(
+                              sampleDates[index],
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppTheme.textSecondaryColor.withOpacity(0.7),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: 500,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          if (value == 0) {
+                            return const SizedBox();
+                          }
+                          return Text(
+                            formatRupiah(value),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppTheme.textSecondaryColor.withOpacity(0.7),
+                            ),
+                            textAlign: TextAlign.right,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: false,
+                  ),
+                  minX: 0,
+                  maxX: 6,
+                  minY: 0,
+                  maxY: 1000,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: emptySpots,
+                      isCurved: true,
+                      color: AppTheme.primaryColor,
+                      barWidth: 2.5,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 3,
+                            color: Colors.white,
+                            strokeWidth: 2,
+                            strokeColor: AppTheme.primaryColor,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        gradient: LinearGradient(
+                          colors: [
+                            AppTheme.primaryColor.withOpacity(0.15),
+                            AppTheme.primaryColor.withOpacity(0.02),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No sales data available',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondaryColor.withOpacity(0.7),
+              ),
+            ),
+          ],
         ),
       );
     }
     
+    // Code for when data is available
     final double maxAmount = _salesData.fold(0.0, (max, data) => 
       data['amount'] > max ? data['amount'] : max);
+    
+    // Make max y-axis value a nice round number
+    final double roundedMaxY = (maxAmount == 0) ? 1000 : 
+        ((maxAmount / 1000).ceil() * 1000).toDouble();
+    final double yInterval = roundedMaxY / 4;
       
     // Prepare data for the chart
     final List<FlSpot> spots = [];
@@ -425,7 +778,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     }
     
     return Container(
-      height: 300,
+      height: 240,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -436,18 +789,12 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
         LineChartData(
           gridData: FlGridData(
             show: true,
-            drawVerticalLine: true,
-            horizontalInterval: maxAmount / 5,
+            drawVerticalLine: false,
+            horizontalInterval: yInterval,
             getDrawingHorizontalLine: (value) {
               return FlLine(
-                color: AppTheme.dividerColor.withOpacity(0.3),
-                strokeWidth: 1,
-              );
-            },
-            getDrawingVerticalLine: (value) {
-              return FlLine(
-                color: AppTheme.dividerColor.withOpacity(0.3),
-                strokeWidth: 1,
+                color: AppTheme.dividerColor.withOpacity(0.2),
+                strokeWidth: 0.5,
               );
             },
           ),
@@ -458,7 +805,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 30,
+                reservedSize: 24,
                 interval: 1,
                 getTitlesWidget: (value, meta) {
                   final int index = value.toInt();
@@ -466,10 +813,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     return const SizedBox();
                   }
                   return Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
+                    padding: const EdgeInsets.only(top: 5.0),
                     child: Text(
                       dates[index],
-                      style: AppTheme.bodySmall(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.textSecondaryColor.withOpacity(0.7),
+                      ),
                     ),
                   );
                 },
@@ -478,12 +828,18 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                interval: maxAmount / 5,
+                interval: yInterval,
                 reservedSize: 40,
                 getTitlesWidget: (value, meta) {
+                  if (value == 0) {
+                    return const SizedBox();
+                  }
                   return Text(
-                    '\$${value.toInt()}',
-                    style: AppTheme.bodySmall(),
+                    formatRupiah(value),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppTheme.textSecondaryColor.withOpacity(0.7),
+                    ),
                     textAlign: TextAlign.right,
                   );
                 },
@@ -491,26 +847,56 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             ),
           ),
           borderData: FlBorderData(
-            show: true,
-            border: Border.all(
-              color: AppTheme.dividerColor.withOpacity(0.5),
-            ),
+            show: false,
           ),
           minX: 0,
           maxX: (spots.length - 1).toDouble(),
           minY: 0,
-          maxY: maxAmount * 1.2,
+          maxY: roundedMaxY,
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              tooltipBgColor: AppTheme.primaryColor.withOpacity(0.8),
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((touchedSpot) {
+                  return LineTooltipItem(
+                    formatRupiah(touchedSpot.y),
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                }).toList();
+              },
+            ),
+          ),
           lineBarsData: [
             LineChartBarData(
               spots: spots,
               isCurved: true,
               color: AppTheme.primaryColor,
-              barWidth: 3,
+              barWidth: 2.5,
               isStrokeCapRound: true,
-              dotData: FlDotData(show: true),
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, percent, barData, index) {
+                  return FlDotCirclePainter(
+                    radius: 3,
+                    color: Colors.white,
+                    strokeWidth: 2,
+                    strokeColor: AppTheme.primaryColor,
+                  );
+                },
+              ),
               belowBarData: BarAreaData(
                 show: true,
-                color: AppTheme.primaryColor.withOpacity(0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.primaryColor.withOpacity(0.15),
+                    AppTheme.primaryColor.withOpacity(0.02),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
             ),
           ],
@@ -521,7 +907,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   
   String _formatChartDate(String dateString) {
     final parsedDate = DateTime.parse(dateString);
-    return DateFormat('MM/dd').format(parsedDate);
+    return DateFormat('dd MMM').format(parsedDate);
   }
   
   Widget _buildTopProductsList() {
@@ -577,7 +963,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
               style: AppTheme.bodySmall(),
             ),
             trailing: Text(
-              '\$${product['revenue'].toStringAsFixed(2)}',
+              formatRupiah(product['revenue']),
               style: AppTheme.bodyLarge(color: AppTheme.successColor),
             ),
           );
@@ -586,119 +972,147 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     );
   }
   
-  Widget _buildQuickActions() {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        // Products Card
-        _buildActionCard(
-          context,
-          'Manage Products',
-          Icons.restaurant_menu,
-          AppTheme.accentColor,
-          () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const ProductListScreen(),
-              ),
-            );
-          },
-        ),
-        
-        // Orders Card
-        _buildActionCard(
-          context,
-          'View Orders',
-          Icons.receipt_long,
-          AppTheme.successColor,
-          () {
-            // TODO: Navigate to orders screen
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Orders feature coming soon!'),
-              ),
-            );
-          },
-        ),
-        
-        // Settings Card
-        _buildActionCard(
-          context,
-          'Store Settings',
-          Icons.settings,
-          Colors.purple,
-          () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const MerchantSettingsScreen(),
-              ),
-            );
-          },
-        ),
-        
-        // Analytics Card
-        _buildActionCard(
-          context,
-          'Detailed Analytics',
-          Icons.bar_chart,
-          Colors.teal,
-          () {
-            // TODO: Navigate to analytics screen
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Detailed analytics coming soon!'),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildActionCard(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
+  Widget _buildLatestTransactions() {
+    if (_latestTransactions.isEmpty) {
+      return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: AppTheme.getShadow(opacity: 0.1),
-          border: Border.all(color: color.withOpacity(0.1)),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 32),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: AppTheme.bodyLarge(color: AppTheme.textPrimaryColor),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Center(
+          child: Text(
+            'No transactions available',
+            style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+          ),
         ),
+      );
+    }
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: AppTheme.getShadow(opacity: 0.1),
       ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _latestTransactions.length,
+        separatorBuilder: (context, index) => Divider(
+          color: AppTheme.dividerColor.withOpacity(0.5),
+          height: 1,
+        ),
+        itemBuilder: (context, index) {
+          final transaction = _latestTransactions[index];
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: _getStatusColor(transaction.status).withOpacity(0.1),
+              child: Icon(
+                _getStatusIcon(transaction.status),
+                color: _getStatusColor(transaction.status),
+                size: 20,
+              ),
+            ),
+            title: Text(
+              'Order #${transaction.id.substring(0, 6)}',
+              style: AppTheme.bodyLarge(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              'Customer: ${transaction.customerName} • ${_formatDate(transaction.createdAt)}',
+              style: AppTheme.bodySmall(),
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  formatRupiah(transaction.totalAmount),
+                  style: AppTheme.bodyLarge(color: AppTheme.successColor),
+                ),
+                Text(
+                  _capitalizeStatus(transaction.status),
+                  style: AppTheme.bodySmall(
+                    color: _getStatusColor(transaction.status),
+                  ),
+                ),
+              ],
+            ),
+            onTap: () {
+              // TODO: Navigate to order details
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Order details coming soon!'),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+  
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'completed':
+        return AppTheme.successColor;
+      case 'pending':
+        return Colors.orange;
+      case 'preparing':
+        return AppTheme.primaryColor;
+      case 'ready':
+        return Colors.blue;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return AppTheme.textSecondaryColor;
+    }
+  }
+  
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'completed':
+        return Icons.check_circle;
+      case 'pending':
+        return Icons.pending;
+      case 'preparing':
+        return Icons.restaurant;
+      case 'ready':
+        return Icons.delivery_dining;
+      case 'cancelled':
+        return Icons.cancel;
+      default:
+        return Icons.receipt;
+    }
+  }
+  
+  String _formatDate(DateTime date) {
+    return DateFormat('MMM d, h:mm a').format(date);
+  }
+  
+  String _capitalizeStatus(String status) {
+    return status.substring(0, 1).toUpperCase() + status.substring(1);
+  }
+  
+  // Add this new method for building star ratings
+  Widget _buildRatingStars(double rating) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        if (index < rating.floor()) {
+          // Full star
+          return const Icon(Icons.star, color: Colors.amber, size: 18);
+        } else if (index == rating.floor() && rating % 1 > 0) {
+          // Half star
+          return const Icon(Icons.star_half, color: Colors.amber, size: 18);
+        } else {
+          // Empty star
+          return Icon(Icons.star_border, color: Colors.amber.withOpacity(0.7), size: 18);
+        }
+      }),
     );
   }
 } 

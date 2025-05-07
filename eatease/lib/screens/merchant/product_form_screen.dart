@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/product_model.dart';
 import '../../services/product_service.dart';
 import '../../utils/app_theme.dart';
@@ -9,6 +10,23 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+
+// Class to manage product customization groups
+class CustomizationGroup {
+  String title;
+  List<String> options;
+  List<double> prices; // Add prices for each option
+  bool isRequired;
+  
+  CustomizationGroup({
+    required this.title, 
+    required this.options,
+    required this.prices,
+    this.isRequired = false,
+  });
+}
 
 class ProductFormScreen extends StatefulWidget {
   final ProductModel? product;
@@ -25,12 +43,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
-  final _prepTimeController = TextEditingController();
+  // Removing preparation time controller
+  // final _prepTimeController = TextEditingController();
 
   bool _isLoading = false;
   String? _errorMessage;
+  // Removing category variable
   String _category = 'Main Course';
   bool _isAvailable = true;
+  
+  // Customization options
+  List<CustomizationGroup> _customizationGroups = [];
   
   // Image upload progress tracking
   double _uploadProgress = 0.0;
@@ -44,7 +67,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final List<File> _newImageFiles = [];
   final ImagePicker _imagePicker = ImagePicker();
 
-  // Category options
+  // Removing category options
   final List<String> _categoryOptions = [
     'Appetizer',
     'Main Course',
@@ -52,11 +75,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     'Beverage',
     'Sides',
     'Breakfast',
-    'Lunch',
-    'Dinner',
     'Fast Food',
-    'Healthy',
-    'Other'
   ];
 
   @override
@@ -67,13 +86,24 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _nameController.text = widget.product!.name;
       _descriptionController.text = widget.product!.description;
       _priceController.text = widget.product!.price.toString();
-      _prepTimeController.text = widget.product!.preparationTimeMinutes.toString();
+      // Removing preparation time initialization
+      // _prepTimeController.text = widget.product!.preparationTimeMinutes.toString();
+      // Removing category initialization
       _category = widget.product!.category;
       _isAvailable = widget.product!.isAvailable;
       _existingImageUrls.addAll(widget.product!.imageUrls);
+      
+      // Load customizations if they exist
+      if (widget.product!.customizations != null) {
+        _loadCustomizations(widget.product!.customizations!);
+      }
     } else {
       // Default values for new product
-      _prepTimeController.text = '30';
+      // Removing preparation time default
+      // _prepTimeController.text = '30';
+      
+      // Add one empty customization group for new products
+      _customizationGroups.add(CustomizationGroup(title: '', options: ['', ''], prices: [0.0, 0.0], isRequired: false));
     }
   }
 
@@ -82,7 +112,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    _prepTimeController.dispose();
+    // Removing preparation time disposal
+    // _prepTimeController.dispose();
     super.dispose();
   }
 
@@ -190,13 +221,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (_existingImageUrls.isEmpty && _newImageFiles.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please add at least one image of your product';
-      });
       return;
     }
 
@@ -361,30 +385,22 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   
   // Continue with product save after images are processed
   Future<void> _continueProductSave(List<String> imageUrls) async {
-    if (imageUrls.isEmpty) {
-      setState(() {
-        _errorMessage = 'Failed to upload images';
-        _isLoading = false;
-        _isUploading = false;
-      });
-      return;
-    }
-
     try {
       double price = 0;
-      int prepTime = 30;
       
       try {
-        price = double.parse(_priceController.text);
-        prepTime = int.parse(_prepTimeController.text);
+        price = double.parse(_priceController.text.replaceAll('.', ''));
       } catch (e) {
         setState(() {
-          _errorMessage = 'Invalid price or preparation time format';
+          _errorMessage = 'Invalid price format';
           _isLoading = false;
           _isUploading = false;
         });
         return;
       }
+
+      // Process customization groups to a format that can be stored
+      final Map<String, dynamic> customizations = _buildCustomizationsMap();
 
       if (widget.product == null) {
         // Create new product
@@ -396,9 +412,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             description: _descriptionController.text.trim(),
             price: price,
             imageUrls: imageUrls,
-            category: _category,
             isAvailable: _isAvailable,
-            preparationTimeMinutes: prepTime,
+            category: _category,
+            customizations: customizations.isNotEmpty ? customizations : null,
             createdAt: DateTime.now(),
           );
 
@@ -427,9 +443,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             description: _descriptionController.text.trim(),
             price: price,
             imageUrls: imageUrls,
-            category: _category,
             isAvailable: _isAvailable,
-            preparationTimeMinutes: prepTime,
+            category: _category,
+            customizations: customizations.isNotEmpty ? customizations : null,
             updatedAt: DateTime.now(),
           );
 
@@ -688,6 +704,423 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  // Load customizations from product data
+  void _loadCustomizations(Map<String, dynamic> customizations) {
+    try {
+      _customizationGroups.clear();
+      
+      customizations.forEach((title, data) {
+        if (data is Map) {
+          // New format with options and prices
+          List<String> options = [];
+          List<double> prices = [];
+          bool isRequired = false;
+          
+          if (data['options'] is List) {
+            options = List<String>.from(data['options'].map((option) => option.toString()));
+          }
+          
+          if (data['prices'] is List) {
+            prices = List<double>.from(data['prices'].map((price) => 
+                price is num ? price.toDouble() : 0.0));
+          } else {
+            // Create default prices (0.0) for each option
+            prices = List<double>.filled(options.length, 0.0);
+          }
+          
+          if (data['isRequired'] is bool) {
+            isRequired = data['isRequired'];
+          }
+          
+          _customizationGroups.add(
+            CustomizationGroup(
+              title: title,
+              options: options,
+              prices: prices,
+              isRequired: isRequired,
+            ),
+          );
+        } else if (data is List) {
+          // Old format with just options, no prices
+          List<String> options = List<String>.from(data.map((option) => option.toString()));
+          List<double> prices = List<double>.filled(options.length, 0.0);
+          
+          _customizationGroups.add(
+            CustomizationGroup(
+              title: title,
+              options: options,
+              prices: prices,
+              isRequired: false,
+            ),
+          );
+        }
+      });
+      
+      // If no customizations were loaded, add an empty group
+      if (_customizationGroups.isEmpty) {
+        _customizationGroups.add(CustomizationGroup(title: '', options: [''], prices: [0.0], isRequired: false));
+      }
+    } catch (e) {
+      print('Error loading customizations: $e');
+      // Add an empty group if there was an error
+      _customizationGroups.add(CustomizationGroup(title: '', options: [''], prices: [0.0], isRequired: false));
+    }
+  }
+  
+  // Build customizations map for saving to Firestore
+  Map<String, dynamic> _buildCustomizationsMap() {
+    final Map<String, dynamic> result = {};
+    
+    for (var group in _customizationGroups) {
+      // Skip empty groups or groups with no title
+      if (group.title.isEmpty || group.options.every((option) => option.isEmpty)) {
+        continue;
+      }
+      
+      // Filter out empty options
+      final nonEmptyOptions = group.options.where((option) => option.isNotEmpty).toList();
+      
+      // Only add groups with at least one option
+      if (nonEmptyOptions.isNotEmpty) {
+        result[group.title] = {
+          'options': nonEmptyOptions,
+          'prices': group.prices.sublist(0, nonEmptyOptions.length),
+          'isRequired': group.isRequired,
+        };
+      }
+    }
+    
+    return result;
+  }
+  
+  // Build the customization section UI
+  Widget _buildCustomizationSection() {
+    return Column(
+      children: [
+        // List existing customization groups
+        ..._customizationGroups.asMap().entries.map((entry) {
+          final index = entry.key;
+          final group = entry.value;
+          
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade200),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Group header with delete button
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Customization Group ${index + 1}',
+                          style: AppTheme.getTextStyle(16, AppTheme.bold, AppTheme.textPrimaryColor),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        onPressed: () => _removeCustomizationGroup(index),
+                        tooltip: 'Remove this group',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Group title field
+                  TextFormField(
+                    initialValue: group.title,
+                    decoration: const InputDecoration(
+                      labelText: 'Group Title (e.g., "Size", "Toppings")',
+                      border: OutlineInputBorder(),
+                      hintText: 'Enter a title for this customization group',
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _customizationGroups[index].title = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Required toggle
+                  SwitchListTile(
+                    title: const Text('Required Selection'),
+                    subtitle: const Text('Customer must select one option'),
+                    value: group.isRequired,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    onChanged: (value) {
+                      setState(() {
+                        _customizationGroups[index].isRequired = value;
+                      });
+                    },
+                  ),
+                  const Divider(),
+                  
+                  // Options header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 6,
+                          child: Text(
+                            'Option Name',
+                            style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 4,
+                          child: Text(
+                            'Additional Price',
+                            style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+                          ),
+                        ),
+                        const SizedBox(width: 40), // Space for delete button
+                      ],
+                    ),
+                  ),
+                  
+                  // Options list
+                  ...group.options.asMap().entries.map((optionEntry) {
+                    final optionIndex = optionEntry.key;
+                    final option = optionEntry.value;
+                    final price = optionIndex < group.prices.length 
+                        ? group.prices[optionIndex] 
+                        : 0.0;
+                    
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Option name
+                          Expanded(
+                            flex: 6,
+                            child: TextFormField(
+                              initialValue: option,
+                              decoration: InputDecoration(
+                                hintText: 'Option ${optionIndex + 1}',
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  _customizationGroups[index].options[optionIndex] = value;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Option price
+                          Expanded(
+                            flex: 4,
+                            child: TextFormField(
+                              initialValue: price.toString(),
+                              decoration: const InputDecoration(
+                                prefixText: 'Rp ',
+                                hintText: '0',
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                              ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                TextInputFormatter.withFunction((oldValue, newValue) {
+                                  if (newValue.text.isEmpty) {
+                                    return newValue;
+                                  }
+                                  // Format the number with thousand separators
+                                  final value = int.parse(newValue.text);
+                                  final formatted = NumberFormat("#,###", "id_ID").format(value);
+                                  return TextEditingValue(
+                                    text: formatted,
+                                    selection: TextSelection.collapsed(offset: formatted.length),
+                                  );
+                                }),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  try {
+                                    if (value.isEmpty) {
+                                      _customizationGroups[index].prices[optionIndex] = 0.0;
+                                    } else {
+                                      _customizationGroups[index].prices[optionIndex] = 
+                                          double.parse(value.replaceAll('.', ''));
+                                    }
+                                  } catch (e) {
+                                    // Ignore parse errors
+                                    _customizationGroups[index].prices[optionIndex] = 0.0;
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Delete option button
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
+                            onPressed: () => _removeOption(index, optionIndex),
+                            tooltip: 'Remove this option',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(duration: 300.ms);
+                  }).toList(),
+                  
+                  // Add option button
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Option'),
+                    onPressed: () => _addOption(index),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryColor,
+                      side: BorderSide(color: AppTheme.primaryColor.withOpacity(0.5)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ).animate().fadeIn(duration: 300.ms);
+        }).toList(),
+        
+        // Add group button
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('Add New Customization Group'),
+            onPressed: _addCustomizationGroup,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor.withOpacity(0.9),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  // Add a new customization group
+  void _addCustomizationGroup() {
+    setState(() {
+      _customizationGroups.add(CustomizationGroup(
+        title: '', 
+        options: [''], 
+        prices: [0.0],
+        isRequired: false,
+      ));
+    });
+    
+    // Show a snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('New customization group added'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+  
+  // Add a new option to a group
+  void _addOption(int groupIndex) {
+    setState(() {
+      _customizationGroups[groupIndex].options.add('');
+      _customizationGroups[groupIndex].prices.add(0.0);
+    });
+    
+    // Show a snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('New option added'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+  
+  // Remove an option from a group
+  void _removeOption(int groupIndex, int optionIndex) {
+    if (_customizationGroups[groupIndex].options.length > 1) {
+      setState(() {
+        _customizationGroups[groupIndex].options.removeAt(optionIndex);
+        
+        // Also remove the corresponding price
+        if (optionIndex < _customizationGroups[groupIndex].prices.length) {
+          _customizationGroups[groupIndex].prices.removeAt(optionIndex);
+        }
+      });
+      
+      // Show a snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Option removed'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } else {
+      // Don't remove the last option, just clear it
+      setState(() {
+        _customizationGroups[groupIndex].options[optionIndex] = '';
+        _customizationGroups[groupIndex].prices[optionIndex] = 0.0;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You need at least one option. Field cleared instead.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+  
+  // Remove a customization group
+  void _removeCustomizationGroup(int index) {
+    if (_customizationGroups.length > 1) {
+      setState(() {
+        _customizationGroups.removeAt(index);
+      });
+      
+      // Show a snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Customization group removed'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } else {
+      // Don't remove the last group, just clear it
+      setState(() {
+        _customizationGroups[index] = CustomizationGroup(
+          title: '', 
+          options: [''], 
+          prices: [0.0],
+          isRequired: false,
+        );
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You need at least one customization group. Fields cleared instead.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -777,7 +1210,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Add at least one image of your product',
+                      'Add images of your product (optional)',
                       style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
                     ),
                     const SizedBox(height: 16),
@@ -931,15 +1364,30 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Price',
                               border: OutlineInputBorder(),
-                              prefixText: '\$',
+                              prefixText: 'Rp ',
                             ),
                             keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              TextInputFormatter.withFunction((oldValue, newValue) {
+                                if (newValue.text.isEmpty) {
+                                  return newValue;
+                                }
+                                // Format the number with thousand separators
+                                final value = int.parse(newValue.text);
+                                final formatted = NumberFormat("#,###", "id_ID").format(value);
+                                return TextEditingValue(
+                                  text: formatted,
+                                  selection: TextSelection.collapsed(offset: formatted.length),
+                                );
+                              }),
+                            ],
                             validator: (value) {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter a price';
                               }
                               try {
-                                final price = double.parse(value);
+                                final price = double.parse(value.replaceAll('.', ''));
                                 if (price <= 0) {
                                   return 'Price must be greater than zero';
                                 }
@@ -950,32 +1398,37 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             },
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _prepTimeController,
-                            decoration: const InputDecoration(
-                              labelText: 'Preparation Time (min)',
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please enter prep time';
-                              }
-                              try {
-                                final time = int.parse(value);
-                                if (time <= 0) {
-                                  return 'Time must be > 0';
-                                }
-                              } catch (e) {
-                                return 'Enter a valid number';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
                       ],
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Category dropdown
+                    DropdownButtonFormField<String>(
+                      value: _category,
+                      decoration: const InputDecoration(
+                        labelText: 'Food Category',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _categoryOptions.map((String category) {
+                        return DropdownMenuItem<String>(
+                          value: category,
+                          child: Text(category),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _category = newValue;
+                          });
+                        }
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a category';
+                        }
+                        return null;
+                      },
                     ),
                     
                     const SizedBox(height: 24),
@@ -985,29 +1438,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       'Additional Information',
                       style: AppTheme.headingMedium(),
                     ),
-                    const SizedBox(height: 16),
-                    
-                    DropdownButtonFormField<String>(
-                      value: _category,
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _categoryOptions.map((category) {
-                        return DropdownMenuItem(
-                          value: category,
-                          child: Text(category),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _category = value;
-                          });
-                        }
-                      },
-                    ),
-                    
                     const SizedBox(height: 16),
                     
                     SwitchListTile(
@@ -1020,6 +1450,22 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         });
                       },
                     ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Customization Options
+                    Text(
+                      'Customization Options',
+                      style: AppTheme.headingMedium(),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Add customization options for your product (e.g., size, toppings, spice level)',
+                      style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    _buildCustomizationSection(),
                     
                     const SizedBox(height: 24),
                     

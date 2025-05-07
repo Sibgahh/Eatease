@@ -219,4 +219,26 @@ class SalesService {
       return [];
     }
   }
+  
+  // Get latest transactions for the current merchant
+  Future<List<OrderModel>> getLatestTransactions({int limit = 5}) async {
+    if (currentUserId == null) {
+      return [];
+    }
+    
+    try {
+      final snapshot = await _orders
+        .where('merchantId', isEqualTo: currentUserId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .get();
+      
+      return snapshot.docs.map((doc) {
+        return OrderModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      }).toList();
+    } catch (e) {
+      print('Error getting latest transactions: $e');
+      return [];
+    }
+  }
 } 

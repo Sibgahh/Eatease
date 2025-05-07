@@ -11,12 +11,15 @@ import 'screens/admin/user_management_screen.dart';
 
 // Customer Screens
 import 'screens/customer/customer_home_screen.dart';
+import 'screens/customer/profile_screen.dart';
+import 'screens/customer/profile_navigation.dart';
 
 // Merchant Screens
 import 'screens/merchant/merchant_home_screen.dart';
 import 'screens/merchant/product_list_screen.dart';
 import 'screens/merchant/product_form_screen.dart';
 import 'screens/merchant/merchant_settings_screen.dart';
+import 'screens/merchant/merchant_orders_screen.dart';
 
 // Shared Components 
 import 'screens/shared/auth_wrapper.dart';
@@ -34,11 +37,15 @@ class AppRoutes {
   static const String merchant = '/merchant';
   static const String merchantHome = '/merchant/home';
   
+  // Customer Routes
+  static const String customerProfile = '/customer/profile';
+  
   // Merchant Routes
   static const String merchantProducts = '/merchant/products';
   static const String merchantProductsAdd = '/merchant/products/add';
   static const String merchantProductsEdit = '/merchant/products/edit';
   static const String merchantSettings = '/merchant/settings';
+  static const String merchantOrders = '/merchant/orders';
   
   // Admin Routes
   static const String admin = '/admin';
@@ -83,6 +90,12 @@ final Map<String, WidgetBuilder> appRoutes = {
     return const MerchantHomeScreen();
   },
   
+  // Customer Routes
+  AppRoutes.customerProfile: (context) {
+    print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Profile (${AppRoutes.customerProfile})');
+    return const ProfileNavigation();
+  },
+  
   // Merchant Routes
   AppRoutes.merchantProducts: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Products (${AppRoutes.merchantProducts})');
@@ -93,6 +106,10 @@ final Map<String, WidgetBuilder> appRoutes = {
     return const ProductFormScreen();
   },
   AppRoutes.merchantSettings: (context) => const MerchantSettingsScreen(),
+  AppRoutes.merchantOrders: (context) {
+    print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Orders (${AppRoutes.merchantOrders})');
+    return const MerchantOrdersScreen();
+  },
   
   // Admin Routes
   AppRoutes.admin: (context) {
