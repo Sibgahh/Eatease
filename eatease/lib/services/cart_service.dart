@@ -108,7 +108,7 @@ class CartService {
   void incrementQuantity(String itemId) {
     final index = _items.indexWhere((item) => item.id == itemId);
     if (index >= 0) {
-      _items[index] = _items[index].incrementQuantity();
+      _items[index] = _items[index].copyWith(quantity: _items[index].quantity + 1);
       _cartController.add(_items);
     }
   }
@@ -119,7 +119,7 @@ class CartService {
     if (index >= 0) {
       final item = _items[index];
       if (item.quantity > 1) {
-        _items[index] = item.decrementQuantity();
+        _items[index] = item.copyWith(quantity: item.quantity - 1);
       } else {
         _items.removeAt(index);
       }

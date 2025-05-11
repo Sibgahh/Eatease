@@ -7,6 +7,9 @@ import '../../models/merchant_model.dart';
 class AuthService {
   final auth.FirebaseAuth _auth = auth.FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  // Memory cache for storing data temporarily
+  final Map<String, dynamic> _memoryCache = {};
 
   // Get current user
   auth.User? get currentUser => _auth.currentUser;
@@ -297,6 +300,21 @@ class AuthService {
     }
     
     try {
+      // Create a cache key based on user ID and current time (for TTL-like behavior)
+      final cacheKey = '${currentUser!.uid}_merchant';
+      
+      // Try to get cached data from in-memory cache
+      final cachedData = _memoryCache[cacheKey];
+      final currentTime = DateTime.now().millisecondsSinceEpoch;
+      
+      // If we have valid cached data that's less than 1 minute old, use it
+      if (cachedData != null && 
+          cachedData['timestamp'] != null && 
+          (currentTime - cachedData['timestamp'] < 60000)) {
+        return cachedData['data'] as MerchantModel?;
+      }
+      
+      // Otherwise, fetch from Firestore
       final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
       if (!userDoc.exists) {
         return null;
@@ -307,7 +325,15 @@ class AuthService {
         return null;
       }
       
-      return MerchantModel.fromMap(userData, userDoc.id);
+      final merchantModel = MerchantModel.fromMap(userData, userDoc.id);
+      
+      // Cache the result
+      _memoryCache[cacheKey] = {
+        'data': merchantModel,
+        'timestamp': currentTime,
+      };
+      
+      return merchantModel;
     } catch (e) {
       print('Error getting merchant model: $e');
       return null;

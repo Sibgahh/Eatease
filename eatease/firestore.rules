@@ -33,6 +33,20 @@ service cloud.firestore {
         get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
     }
     
+    // Check if user is the author of the document
+    function isAuthor(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Allow full access to chat conversations and messages for authenticated users (temporary for debugging)
+    match /chat_conversations/{conversationId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /chat_messages/{messageId} {
+      allow read, write: if isAuthenticated();
+    }
+    
     // Users collection rules
     match /users/{userId} {
       // Anyone can read public user data
@@ -73,7 +87,8 @@ service cloud.firestore {
       
       // Only merchants and admins can create products
       allow create: if isAuthenticated() && 
-        (isMerchant() || isAdmin());
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'merchant';
       
       // Only the product owner (merchant) or admins can update or delete products
       allow update, delete: if isAuthenticated() && 

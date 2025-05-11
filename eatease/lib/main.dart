@@ -13,8 +13,12 @@ import 'screens/admin/admin_dashboard.dart';
 import 'screens/admin/admin_settings_screen.dart';
 import 'services/auth/auth_service.dart';
 import 'services/product_service.dart';
+import 'services/cleanup_service.dart';
+import 'services/connectivity_service.dart';
 import 'utils/app_theme.dart';
 import 'routes.dart';
+import 'widgets/connectivity_wrapper.dart';
+import 'services/chat_service.dart';
 
 // Add RouteObserver to track navigation
 class NavigationObserver extends NavigatorObserver {
@@ -48,6 +52,10 @@ void main() async {
   print('[APP] Initializing Firebase at ${DateTime.now().toIso8601String()}');
   
   try {
+    // Initialize connectivity service first
+    print('[APP] Initializing ConnectivityService');
+    ConnectivityService().initialize();
+    
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
@@ -64,6 +72,16 @@ void main() async {
     // Initialize Firestore settings for better performance
     FirebaseFirestore.instance.settings = 
         const Settings(persistenceEnabled: true, cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED);
+    
+    // Initialize the cleanup service to handle expiring conversations
+    print('[APP] Starting cleanup service');
+    CleanupService().startPeriodicCleanup(
+      checkInterval: const Duration(minutes: 15), // Check every 15 minutes
+    );
+    
+    // Update existing chat conversations with new fields
+    print('[APP] Updating chat conversations data model');
+    await ChatService().updateExistingConversations();
     
     runApp(const MyApp());
   } catch (e) {
@@ -160,26 +178,68 @@ Future<void> _testFirebaseStorage() async {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _isInitializing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    setState(() {
+      _isInitializing = true;
+    });
+    
+    // Initialize Firebase
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      
+      print('[APP] Firebase initialized at ${DateTime.now()}');
+      
+      // Migrate chat conversations data
+      final chatService = ChatService();
+      await chatService.updateExistingConversations();
+      
+    } catch (e, stackTrace) {
+      print('[APP] Error initializing Firebase: $e');
+      print(stackTrace);
+    }
+    
+    setState(() {
+      _isInitializing = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     print('[APP] Building main MaterialApp at ${DateTime.now().toIso8601String()}');
-    return MaterialApp(
-      title: 'EatEase',
-      theme: AppTheme.getThemeData(context),
-      // Register the NavigationObserver
-      navigatorObservers: [NavigationObserver()],
-      initialRoute: AppRoutes.initial,
-      routes: appRoutes,
-      onUnknownRoute: (settings) {
-        print('[APP] Unknown route: ${settings.name}, redirecting to initial route at ${DateTime.now().toIso8601String()}');
-        return MaterialPageRoute(
-          settings: RouteSettings(name: AppRoutes.initial),
-          builder: (context) => appRoutes[AppRoutes.initial]!(context),
-        );
-      },
+    return ConnectivityWrapper(
+      child: MaterialApp(
+        title: 'EatEase',
+        theme: AppTheme.getThemeData(context),
+        // Register the NavigationObserver
+        navigatorObservers: [NavigationObserver()],
+        initialRoute: AppRoutes.initial,
+        routes: appRoutes,
+        onUnknownRoute: (settings) {
+          print('[APP] Unknown route: ${settings.name}, redirecting to initial route at ${DateTime.now().toIso8601String()}');
+          return MaterialPageRoute(
+            settings: RouteSettings(name: AppRoutes.initial),
+            builder: (context) => appRoutes[AppRoutes.initial]!(context),
+          );
+        },
+      ),
     );
   }
 }

@@ -4,15 +4,24 @@ import '../services/auth/auth_service.dart';
 import '../screens/customer/cart_screen.dart';
 import '../screens/customer/profile_screen.dart';
 import '../screens/customer/customer_home_screen.dart';
+import '../screens/customer/customer_orders_screen.dart';
+import '../screens/customer/chat/customer_chat_screen.dart';
+import '../screens/merchant/merchant_home_screen.dart';
+import '../screens/merchant/product_list_screen.dart';
+import '../screens/merchant/merchant_orders_screen.dart';
+import '../screens/merchant/merchant_settings_screen.dart';
+import '../screens/merchant/merchant_chat_screen.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
   final String userRole;
+  final Function(int)? onTabChanged;
 
   const BottomNavBar({
     Key? key,
     required this.currentIndex,
     required this.userRole,
+    this.onTabChanged,
   }) : super(key: key);
 
   @override
@@ -114,18 +123,29 @@ class BottomNavBar extends StatelessWidget {
                 break;
               case 2:
                 // Navigate to orders
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Orders coming soon!'),
-                    backgroundColor: Colors.green.shade600,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                print('[NAVIGATION] Directly navigating to Orders using MaterialPageRoute');
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CustomerOrdersScreen(),
+                    settings: const RouteSettings(name: AppRoutes.customerOrders),
                   ),
+                  (route) => false, // Clear all other routes
                 );
                 break;
               case 3:
+                // Navigate to chat
+                print('[NAVIGATION] Directly navigating to Chat using MaterialPageRoute');
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CustomerChatScreen(),
+                    settings: const RouteSettings(name: AppRoutes.customerChat),
+                  ),
+                  (route) => false, // Clear all other routes
+                );
+                break;
+              case 4:
                 // Direct navigation to profile screen
                 print('[NAVIGATION] Directly navigating to Profile using MaterialPageRoute');
                 Navigator.pushAndRemoveUntil(
@@ -143,7 +163,8 @@ class BottomNavBar extends StatelessWidget {
             _buildBottomNavItem(Icons.home_outlined, Icons.home, 'Home', 0),
             _buildBottomNavItem(Icons.shopping_cart_outlined, Icons.shopping_cart, 'Cart', 1),
             _buildBottomNavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Orders', 2),
-            _buildBottomNavItem(Icons.person_outline, Icons.person, 'Profile', 3),
+            _buildBottomNavItem(Icons.chat_outlined, Icons.chat, 'Chat', 3),
+            _buildBottomNavItem(Icons.person_outline, Icons.person, 'Profile', 4),
           ],
         ),
       ),
@@ -184,28 +205,67 @@ class BottomNavBar extends StatelessWidget {
           onTap: (index) {
             if (index == currentIndex) return;
             
+            // If we have an onTabChanged callback, use it
+            if (onTabChanged != null) {
+              onTabChanged!(index);
+              return;
+            }
+            
+            // Fallback to old navigation for backward compatibility
             switch (index) {
               case 0:
-                Navigator.pushReplacementNamed(context, AppRoutes.merchant);
+                print('[NAVIGATION] Navigating to Merchant Home');
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const MerchantHomeScreen(),
+                  ),
+                  (route) => false,
+                );
                 break;
               case 1:
-                Navigator.pushReplacementNamed(context, AppRoutes.merchantProducts);
+                print('[NAVIGATION] Navigating to Merchant Products');
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const ProductListScreen(),
+                  ),
+                  (route) => false,
+                );
                 break;
               case 2:
-                // Navigate to orders
-                Navigator.pushReplacementNamed(context, AppRoutes.merchantOrders);
+                print('[NAVIGATION] Navigating to Merchant Orders');
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const MerchantOrdersScreen(),
+                  ),
+                  (route) => false,
+                );
                 break;
               case 3:
-                // Navigate to settings
-                Navigator.pushReplacementNamed(context, AppRoutes.merchantSettings);
+                print('[NAVIGATION] Navigating to Merchant Chat');
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const MerchantChatScreen(),
+                  ),
+                  (route) => false,
+                );
+                break;
+              case 4:
+                print('[NAVIGATION] Navigating to Merchant Settings');
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const MerchantSettingsScreen(),
+                  ),
+                  (route) => false,
+                );
                 break;
             }
           },
           items: [
-            _buildBottomNavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard', 0),
-            _buildBottomNavItem(Icons.restaurant_menu_outlined, Icons.restaurant_menu, 'Products', 1),
+            _buildBottomNavItem(Icons.home_outlined, Icons.home, 'Home', 0),
+            _buildBottomNavItem(Icons.inventory_2_outlined, Icons.inventory_2, 'Products', 1),
             _buildBottomNavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Orders', 2),
-            _buildBottomNavItem(Icons.settings_outlined, Icons.settings, 'Settings', 3),
+            _buildBottomNavItem(Icons.chat_outlined, Icons.chat, 'Chat', 3),
+            _buildBottomNavItem(Icons.settings_outlined, Icons.settings, 'Settings', 4),
           ],
         ),
       ),
@@ -253,21 +313,11 @@ class BottomNavBar extends StatelessWidget {
               case 1:
                 Navigator.pushReplacementNamed(context, AppRoutes.adminUsers);
                 break;
-              case 2:
-                // View as customer
-                Navigator.pushReplacementNamed(context, AppRoutes.customer);
-                break;
-              case 3:
-                // View as merchant
-                Navigator.pushReplacementNamed(context, AppRoutes.merchant);
-                break;
             }
           },
           items: [
             _buildBottomNavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard', 0),
             _buildBottomNavItem(Icons.people_outline, Icons.people, 'Users', 1),
-            _buildBottomNavItem(Icons.person_outline, Icons.person, 'Customer View', 2),
-            _buildBottomNavItem(Icons.store_outlined, Icons.store, 'Merchant View', 3),
           ],
         ),
       ),

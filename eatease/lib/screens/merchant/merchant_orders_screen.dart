@@ -6,14 +6,331 @@ import '../../utils/app_theme.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Separate widget for just the orders list
+class MerchantOrdersList extends StatefulWidget {
+  final String status;
+  
+  const MerchantOrdersList({
+    Key? key,
+    required this.status,
+  }) : super(key: key);
+  
+  @override
+  State<MerchantOrdersList> createState() => _MerchantOrdersListState();
+}
+
+class _MerchantOrdersListState extends State<MerchantOrdersList> {
+  final AuthService _authService = AuthService();
+  final OrderService _orderService = OrderService();
+  String? _merchantId;
+  bool _isLoading = true;
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadMerchantId();
+  }
+  
+  Future<void> _loadMerchantId() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      final user = _authService.currentUser;
+      if (user != null) {
+        _merchantId = user.uid;
+      }
+    } catch (e) {
+      print('Error loading merchant ID: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+    
+    if (_merchantId == null) {
+      return const Center(
+        child: Text('Unable to load merchant information'),
+      );
+    }
+
+    // Map the order status for query
+    List<String> statusList = [];
+    switch (widget.status) {
+      case 'pending':
+        statusList = ['pending'];
+        break;
+      case 'preparing':
+        statusList = ['preparing', 'ready'];
+        break;
+      case 'completed':
+        statusList = ['completed'];
+        break;
+    }
+
+    return StreamBuilder<List<OrderModel>>(
+      stream: _orderService.getMerchantOrdersByStatus(_merchantId!, statusList),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final orders = snapshot.data ?? [];
+
+        if (orders.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  'No ${widget.status == 'pending' ? 'new' : widget.status} orders',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: orders.length,
+          itemBuilder: (context, index) {
+            final order = orders[index];
+            return MerchantOrdersScreen.buildOrderCard(context, order);
+          },
+        );
+      },
+    );
+  }
+}
+
 class MerchantOrdersScreen extends StatefulWidget {
   const MerchantOrdersScreen({Key? key}) : super(key: key);
 
+  // Static method to build an order card that can be used anywhere
+  static Widget buildOrderCard(BuildContext context, OrderModel order) {
+    String statusText = '';
+    Color statusColor = Colors.grey;
+    IconData statusIcon = Icons.hourglass_empty;
+
+    switch (order.status) {
+      case 'pending':
+        statusText = 'New Order';
+        statusColor = Colors.orange;
+        statusIcon = Icons.notifications_active;
+        break;
+      case 'preparing':
+        statusText = 'Preparing';
+        statusColor = Colors.blue;
+        statusIcon = Icons.restaurant;
+        break;
+      case 'ready':
+        statusText = 'Ready';
+        statusColor = Colors.green;
+        statusIcon = Icons.check_circle;
+        break;
+      case 'completed':
+        statusText = 'Completed';
+        statusColor = Colors.green.shade800;
+        statusIcon = Icons.task_alt;
+        break;
+      case 'cancelled':
+        statusText = 'Cancelled';
+        statusColor = Colors.red;
+        statusIcon = Icons.cancel;
+        break;
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: () => _showOrderDetails(context, order),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Order #${order.id.substring(0, 8)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Chip(
+                    label: Text(
+                      statusText,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    backgroundColor: statusColor,
+                    avatar: Icon(
+                      statusIcon,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Customer: ${order.customerName}',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Order Time: ${_formatDateTime(order.createdAt)}',
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${order.items.length} items',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    '\$${order.totalAmount.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              if (order.status == 'pending')
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () => _updateOrderStatus(context, order, 'preparing'),
+                        icon: const Icon(Icons.check),
+                        label: const Text('Accept'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => _updateOrderStatus(context, order, 'cancelled'),
+                        icon: const Icon(Icons.cancel),
+                        label: const Text('Decline'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (order.status == 'preparing')
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: ElevatedButton.icon(
+                    onPressed: () => _updateOrderStatus(context, order, 'ready'),
+                    icon: const Icon(Icons.check_circle),
+                    label: const Text('Mark Ready'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 40),
+                    ),
+                  ),
+                ),
+              if (order.status == 'ready')
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: ElevatedButton.icon(
+                    onPressed: () => _updateOrderStatus(context, order, 'completed'),
+                    icon: const Icon(Icons.check_circle),
+                    label: const Text('Mark Completed'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 40),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // Extracted static helper methods
+  static String _formatDateTime(DateTime dateTime) {
+    // Format time as: Today, 3:45 PM or 12 July, 3:45 PM
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    
+    final hour = dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour == 0 ? 12 : dateTime.hour;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+    
+    if (date == today) {
+      return 'Today, $hour:$minute $period';
+    } else {
+      final List<String> months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      return '${dateTime.day} ${months[dateTime.month - 1]}, $hour:$minute $period';
+    }
+  }
+
+  static void _showOrderDetails(BuildContext context, OrderModel order) {
+    final MerchantOrdersScreenState? state = context.findAncestorStateOfType<MerchantOrdersScreenState>();
+    if (state != null) {
+      state._showOrderDetails(order);
+    }
+  }
+  
+  static void _updateOrderStatus(BuildContext context, OrderModel order, String newStatus) {
+    final MerchantOrdersScreenState? state = context.findAncestorStateOfType<MerchantOrdersScreenState>();
+    if (state != null) {
+      state._updateOrderStatus(order, newStatus);
+    }
+  }
+
   @override
-  State<MerchantOrdersScreen> createState() => _MerchantOrdersScreenState();
+  State<MerchantOrdersScreen> createState() => MerchantOrdersScreenState();
 }
 
-class _MerchantOrdersScreenState extends State<MerchantOrdersScreen>
+class MerchantOrdersScreenState extends State<MerchantOrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final AuthService _authService = AuthService();
@@ -82,19 +399,15 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildOrdersList('pending'),
-          _buildOrdersList('preparing'),
-          _buildOrdersList('completed'),
+          buildOrdersList('pending'),
+          buildOrdersList('preparing'),
+          buildOrdersList('completed'),
         ],
-      ),
-      bottomNavigationBar: const BottomNavBar(
-        currentIndex: 2,
-        userRole: 'merchant',
       ),
     );
   }
 
-  Widget _buildOrdersList(String orderStatus) {
+  Widget buildOrdersList(String orderStatus) {
     if (_merchantId == null) {
       return const Center(
         child: Text('Unable to load merchant information'),

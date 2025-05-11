@@ -5,9 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._(); // Private constructor to prevent instantiation
   
-  // App Colors
-  static const Color primaryColor = Color(0xFF2196F3);  // Blue
-  static const Color accentColor = Color(0xFFFF9800);   // Orange
+  // Theme Colors for different roles
+  static const Color customerPrimaryColor = Color(0xFF2D664A);  // Primary Green
+  static const Color customerSecondaryColor = Color(0xFFEEAD55);  // Secondary Orange
+  static const Color customerAccentColor = Color(0xFFF6E8CF);  // Light Beige
+  static const Color merchantPrimaryColor = Color(0xFFFF9800);  // Orange
+  static const Color adminPrimaryColor = Color(0xFF212121);     // Dark Grey
+  
+  // Common Colors
   static const Color backgroundColor = Color(0xFFF5F5F5); // Light grey
   static const Color errorColor = Color(0xFFE53935);    // Red
   static const Color successColor = Color(0xFF4CAF50);  // Green
@@ -21,6 +26,64 @@ class AppTheme {
   static const FontWeight medium = FontWeight.w500;
   static const FontWeight semiBold = FontWeight.w600;
   static const FontWeight bold = FontWeight.w700;
+  
+  // Get primary color based on user role
+  static Color getPrimaryColor(String role) {
+    switch (role.toLowerCase()) {
+      case 'customer':
+        return customerPrimaryColor;
+      case 'merchant':
+        return merchantPrimaryColor;
+      case 'admin':
+        return adminPrimaryColor;
+      default:
+        return customerPrimaryColor;
+    }
+  }
+
+  // Get secondary color based on user role
+  static Color getSecondaryColor(String role) {
+    switch (role.toLowerCase()) {
+      case 'customer':
+        return customerSecondaryColor;
+      case 'merchant':
+        return merchantPrimaryColor;
+      case 'admin':
+        return adminPrimaryColor;
+      default:
+        return customerSecondaryColor;
+    }
+  }
+
+  // Get accent color based on user role
+  static Color getAccentColor(String role) {
+    switch (role.toLowerCase()) {
+      case 'customer':
+        return customerAccentColor;
+      case 'merchant':
+        return merchantPrimaryColor;
+      case 'admin':
+        return adminPrimaryColor;
+      default:
+        return customerAccentColor;
+    }
+  }
+
+  // Get primary color from context
+  static Color get primaryColor {
+    // Default to customer color if no context is available
+    return customerPrimaryColor;
+  }
+
+  // Get secondary color from context
+  static Color get secondaryColor {
+    return customerSecondaryColor;
+  }
+
+  // Get accent color from context
+  static Color get accentColor {
+    return customerAccentColor;
+  }
   
   // Text Styles with Poppins font
   static TextStyle getTextStyle(double fontSize, FontWeight fontWeight, Color color) {
@@ -71,11 +134,24 @@ class AppTheme {
   }
   
   // App theme data
-  static ThemeData getThemeData(BuildContext context) {
+  static ThemeData getThemeData(BuildContext context, {String role = 'customer'}) {
+    final primaryColor = getPrimaryColor(role);
+    final secondaryColor = getSecondaryColor(role);
+    final accentColor = getAccentColor(role);
+    final isAdmin = role.toLowerCase() == 'admin';
+    
     return ThemeData(
-      primarySwatch: Colors.blue,
+      primaryColor: primaryColor,
+      primarySwatch: _createMaterialColor(primaryColor),
+      colorScheme: ColorScheme.light(
+        primary: primaryColor,
+        secondary: secondaryColor,
+        surface: Colors.white,
+        background: isAdmin ? Colors.white : backgroundColor,
+        error: errorColor,
+      ),
       visualDensity: VisualDensity.adaptivePlatformDensity,
-      scaffoldBackgroundColor: backgroundColor,
+      scaffoldBackgroundColor: isAdmin ? Colors.white : backgroundColor,
       fontFamily: GoogleFonts.poppins().fontFamily,
       
       // Apply Poppins to text theme
@@ -86,7 +162,7 @@ class AppTheme {
       // AppBar theme
       appBarTheme: AppBarTheme(
         backgroundColor: primaryColor,
-        elevation: 2,
+        elevation: isAdmin ? 0 : 2,
         titleTextStyle: getTextStyle(20, semiBold, Colors.white),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -101,7 +177,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
-          elevation: 2,
+          elevation: isAdmin ? 0 : 2,
         ),
       ),
       
@@ -112,11 +188,11 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: dividerColor),
+          borderSide: BorderSide(color: isAdmin ? Colors.grey.shade300 : dividerColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: dividerColor),
+          borderSide: BorderSide(color: isAdmin ? Colors.grey.shade300 : dividerColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -140,7 +216,7 @@ class AppTheme {
       // Card theme
       cardTheme: CardTheme(
         color: Colors.white,
-        elevation: 2,
+        elevation: isAdmin ? 0 : 2,
         shadowColor: Colors.black.withOpacity(0.1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -148,5 +224,28 @@ class AppTheme {
         clipBehavior: Clip.antiAlias,
       ),
     );
+  }
+  
+  // Helper method to create MaterialColor from a single color
+  static MaterialColor _createMaterialColor(Color color) {
+    List<double> strengths = <double>[.05];
+    Map<int, Color> swatch = {};
+    final int r = color.red, g = color.green, b = color.blue;
+
+    for (int i = 1; i < 10; i++) {
+      strengths.add(0.1 * i);
+    }
+    
+    for (var strength in strengths) {
+      final double ds = 0.5 - strength;
+      swatch[(strength * 1000).round()] = Color.fromRGBO(
+        r + ((ds < 0 ? r : (255 - r)) * ds).round(),
+        g + ((ds < 0 ? g : (255 - g)) * ds).round(),
+        b + ((ds < 0 ? b : (255 - b)) * ds).round(),
+        1,
+      );
+    }
+    
+    return MaterialColor(color.value, swatch);
   }
 } 

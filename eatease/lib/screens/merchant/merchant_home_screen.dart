@@ -8,11 +8,17 @@ import '../../models/order_model.dart';
 import '../../utils/app_theme.dart';
 import 'product_list_screen.dart';
 import 'merchant_settings_screen.dart';
+import 'merchant_orders_screen.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../routes.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
-  const MerchantHomeScreen({super.key});
+  final bool showScaffold;
+  
+  const MerchantHomeScreen({
+    super.key, 
+    this.showScaffold = false
+  });
 
   @override
   State<MerchantHomeScreen> createState() => _MerchantHomeScreenState();
@@ -119,85 +125,82 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Show a loading indicator
     if (_isLoading) {
-      return Scaffold(
-        appBar: _buildAppBar(),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return widget.showScaffold
+        ? Scaffold(
+            appBar: _buildAppBar(),
+            body: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          )
+        : const Center(
+            child: CircularProgressIndicator(),
+          );
     }
     
-    return Scaffold(
-      appBar: _buildAppBar(),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header as Card
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _buildHeaderCard(),
+    // Build the main content
+    Widget content = RefreshIndicator(
+      onRefresh: _loadData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header as Card
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _buildHeaderCard(),
+            ),
+            
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Store setup reminder (if not configured)
+                  if (!_isStoreConfigured)
+                    _buildSetupReminder(),
+                    
+                  // Performance Summary Card
+                  const SizedBox(height: 16),
+                  Text('Performance Summary', style: AppTheme.headingMedium()),
+                  const SizedBox(height: 12),
+                  
+                  _buildPerformanceCard(),
+                  
+                  // Sales Chart
+                  const SizedBox(height: 24),
+                  Text('Sales Trend (Last 7 Days)', style: AppTheme.headingMedium()),
+                  const SizedBox(height: 12),
+                  _buildSalesChart(),
+                  
+                  // Top Products
+                  const SizedBox(height: 24),
+                  Text('Top Selling Products', style: AppTheme.headingMedium()),
+                  const SizedBox(height: 12),
+                  _buildTopProductsList(),
+                  
+                  // Latest Transactions
+                  const SizedBox(height: 24),
+                  Text('Latest Transactions', style: AppTheme.headingMedium()),
+                  const SizedBox(height: 12),
+                  _buildLatestTransactions(),
+                ],
               ),
-              
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Store setup reminder (if not configured)
-                    if (!_isStoreConfigured)
-                      _buildSetupReminder(),
-                      
-                    // Performance Summary Card
-                    const SizedBox(height: 16),
-                    Text('Performance Summary', style: AppTheme.headingMedium()),
-                    const SizedBox(height: 12),
-                    
-                    _buildPerformanceCard(),
-                    
-                    // Sales Chart
-                    const SizedBox(height: 24),
-                    Text('Sales Trend (Last 7 Days)', style: AppTheme.headingMedium()),
-                    const SizedBox(height: 12),
-                    _buildSalesChart(),
-                    
-                    // Top Products
-                    const SizedBox(height: 24),
-                    Text('Top Selling Products', style: AppTheme.headingMedium()),
-                    const SizedBox(height: 12),
-                    _buildTopProductsList(),
-                    
-                    // Latest Transactions
-                    const SizedBox(height: 24),
-                    Text('Latest Transactions', style: AppTheme.headingMedium()),
-                    const SizedBox(height: 12),
-                    _buildLatestTransactions(),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      bottomNavigationBar: FutureBuilder<String>(
-        future: _authService.getUserRole(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SizedBox();
-          }
-          
-          final userRole = snapshot.data ?? 'merchant';
-          return BottomNavBar(
-            currentIndex: 0,  // Home tab
-            userRole: userRole,
-          );
-        },
-      ),
     );
+    
+    // Return content with or without scaffold depending on showScaffold parameter
+    return widget.showScaffold
+        ? Scaffold(
+            appBar: _buildAppBar(),
+            body: content,
+          )
+        : content;
   }
   
   // New method for the redesigned AppBar
@@ -220,32 +223,32 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           ),
           const SizedBox(width: 8),
           Text(
-          'EatEase Merchant',
+            'EatEase Merchant',
             style: AppTheme.headingSmall(color: AppTheme.textPrimaryColor),
-        ),
+          ),
         ],
       ),
-        actions: [
-          // Admin Panel Button (only visible to admins)
-          FutureBuilder<bool>(
-            future: _authService.isAdmin(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
-                return const SizedBox();
-              }
-              
-              return IconButton(
+      actions: [
+        // Admin Panel Button (only visible to admins)
+        FutureBuilder<bool>(
+          future: _authService.isAdmin(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
+              return const SizedBox();
+            }
+            
+            return IconButton(
               icon: Icon(
                 Icons.admin_panel_settings,
                 color: AppTheme.primaryColor,
               ),
-                onPressed: () {
-                  Navigator.pushNamed(context, '/admin');
-                },
-                tooltip: 'Admin Dashboard',
-              );
-            },
-          ),
+              onPressed: () {
+                Navigator.pushNamed(context, '/admin');
+              },
+              tooltip: 'Admin Dashboard',
+            );
+          },
+        ),
       ],
     );
   }

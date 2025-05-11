@@ -29,6 +29,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   final currencyFormat = NumberFormat("#,###", "id_ID");
   
   String _selectedCategory = 'All';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
   
   // Use ValueNotifier for favorites to avoid rebuilding the whole screen
   ValueNotifier<Set<String>> get _favoriteItemsNotifier => CustomerHomeScreen.favoritesNotifier;
@@ -133,6 +135,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -259,6 +262,49 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ),
           ),
 
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.trim().toLowerCase();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Search for food...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: AppTheme.primaryColor),
+                ),
+              ),
+            ),
+          ),
+
           // Category Selector
           Container(
             decoration: BoxDecoration(
@@ -269,8 +315,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               ),
             ),
             padding: const EdgeInsets.only(bottom: 16),
-            child: SizedBox(
-              height: 50,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Text(
+                    "Categories",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 55,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: _categories.length,
@@ -281,36 +340,63 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   
                   return Padding(
                     padding: const EdgeInsets.only(right: 12),
-                    child: ChoiceChip(
-                      label: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        child: Text(category),
-                      ),
-                      selected: isSelected,
-                      selectedColor: AppTheme.primaryColor,
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategory = category;
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppTheme.primaryColor : Colors.white,
                         borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(
+                              boxShadow: isSelected ? [
+                                BoxShadow(
+                                  color: AppTheme.primaryColor.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                )
+                              ] : [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.2),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ],
+                              border: Border.all(
                           color: isSelected ? AppTheme.primaryColor : Colors.grey.shade300,
                           width: 1,
                         ),
                       ),
-                      onSelected: (selected) {
-                        if (selected) {
-                          setState(() {
-                            _selectedCategory = category;
-                          });
-                        }
-                      },
-                      labelStyle: TextStyle(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _getCategoryIcon(category),
+                                  size: 16,
+                                  color: isSelected ? Colors.white : Colors.grey.shade700,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  category,
+                                  style: TextStyle(
                         color: isSelected ? Colors.white : Colors.black87,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                       ),
                     ),
                   );
                 },
               ),
+                ),
+              ],
             ),
           ),
           
@@ -331,11 +417,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 
                 final allProducts = snapshot.data ?? [];
                 
-                // Filter products by category only
+                // Filter products by category and search query
                 final filteredProducts = allProducts.where((product) {
                   bool matchesCategory = _selectedCategory == 'All' || product.category == _selectedCategory;
+                  bool matchesSearch = _searchQuery.isEmpty || 
+                      product.name.toLowerCase().contains(_searchQuery) || 
+                      product.description.toLowerCase().contains(_searchQuery);
                   
-                  return matchesCategory && product.isAvailable;
+                  return matchesCategory && product.isAvailable && matchesSearch;
                 }).toList();
                 
                 if (filteredProducts.isEmpty) {
@@ -349,12 +438,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           color: Colors.grey,
                         ),
                         const SizedBox(height: 16),
-                        const Text(
-                          'No food items available in this category',
-                          style: TextStyle(
+                        Text(
+                          _searchQuery.isNotEmpty
+                              ? 'No food items matching "$_searchQuery"'
+                              : 'No food items available in this category',
+                          style: const TextStyle(
                             fontSize: 16,
                             color: Colors.grey,
                           ),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
@@ -450,13 +542,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       child: InkWell(
         onTap: () {
           // Navigate to the store details screen
-          _getMerchantName(product.merchantId).then((merchantName) {
+          _getMerchantData(product.merchantId).then((merchantData) {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => StoreDetailScreen(
                   merchantId: product.merchantId,
-                  storeName: merchantName,
+                  merchantName: merchantData['name'] ?? 'Local Restaurant',
+                  merchantImage: merchantData['image'] ?? '',
+                  merchantAddress: merchantData['address'] ?? 'No address available',
+                  merchantRating: merchantData['rating'] ?? 4.5,
+                  merchantReviewCount: merchantData['reviewCount'] ?? 0,
+                  isOpen: merchantData['isOpen'] ?? true,
+                  merchantCategory: merchantData['category'] ?? 'Restaurant',
                 ),
               ),
             );
@@ -466,9 +564,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Store name header
-            FutureBuilder<String>(
-              future: _getMerchantName(product.merchantId),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _getMerchantData(product.merchantId),
               builder: (context, snapshot) {
+                final merchantName = snapshot.data?['name'] ?? 'Local Restaurant';
                 return Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
@@ -491,7 +590,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          snapshot.data ?? 'Local Restaurant',
+                          merchantName,
                           style: TextStyle(
                             fontSize: 10,
                             color: AppTheme.primaryColor,
@@ -673,16 +772,42 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  Future<String> _getMerchantName(String merchantId) async {
+  // Get merchant data
+  Future<Map<String, dynamic>> _getMerchantData(String merchantId) async {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(merchantId).get();
       if (doc.exists && doc.data() != null) {
-        return doc.data()!['storeName'] ?? doc.data()!['displayName'] ?? 'Local Restaurant';
+        final data = doc.data()!;
+        return {
+          'name': data['storeName'] ?? data['displayName'] ?? 'Local Restaurant',
+          'image': data['bannerImageUrl'] ?? data['photoURL'] ?? '',
+          'address': data['storeAddress'] ?? 'No address available',
+          'rating': data['rating']?.toDouble() ?? 4.5,
+          'reviewCount': data['reviewCount'] ?? 0,
+          'isOpen': data['isOpen'] ?? true,
+          'category': data['storeCategory'] ?? 'Restaurant',
+        };
       }
-      return 'Local Restaurant';
+      return {
+        'name': 'Local Restaurant',
+        'image': '',
+        'address': 'No address available',
+        'rating': 4.5,
+        'reviewCount': 0,
+        'isOpen': true,
+        'category': 'Restaurant',
+      };
     } catch (e) {
-      print('Error fetching merchant name: $e');
-      return 'Local Restaurant';
+      print('Error fetching merchant data: $e');
+      return {
+        'name': 'Local Restaurant',
+        'image': '',
+        'address': 'No address available',
+        'rating': 4.5,
+        'reviewCount': 0,
+        'isOpen': true,
+        'category': 'Restaurant',
+      };
     }
   }
   
@@ -820,13 +945,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       child: InkWell(
         onTap: () {
           Navigator.pop(context);
-          _getMerchantName(product.merchantId).then((merchantName) {
+          _getMerchantData(product.merchantId).then((merchantData) {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => StoreDetailScreen(
                   merchantId: product.merchantId,
-                  storeName: merchantName,
+                  merchantName: merchantData['name'] ?? 'Local Restaurant',
+                  merchantImage: merchantData['image'] ?? '',
+                  merchantAddress: merchantData['address'] ?? 'No address available',
+                  merchantRating: merchantData['rating'] ?? 4.5,
+                  merchantReviewCount: merchantData['reviewCount'] ?? 0,
+                  isOpen: merchantData['isOpen'] ?? true,
+                  merchantCategory: merchantData['category'] ?? 'Restaurant',
                 ),
               ),
             );
@@ -872,11 +1003,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FutureBuilder<String>(
-                      future: _getMerchantName(product.merchantId),
+                    FutureBuilder<Map<String, dynamic>>(
+                      future: _getMerchantData(product.merchantId),
                       builder: (context, snapshot) {
+                        final merchantName = snapshot.data?['name'] ?? 'Local Restaurant';
                         return Text(
-                          snapshot.data ?? 'Local Restaurant',
+                          merchantName,
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade700,
@@ -939,5 +1071,28 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         ),
       ),
     );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'all':
+        return Icons.restaurant_menu;
+      case 'appetizer':
+        return Icons.tapas;
+      case 'main course':
+        return Icons.dinner_dining;
+      case 'dessert':
+        return Icons.cake;
+      case 'beverage':
+        return Icons.local_cafe;
+      case 'sides':
+        return Icons.rice_bowl;
+      case 'breakfast':
+        return Icons.egg;
+      case 'fast food':
+        return Icons.fastfood;
+      default:
+        return Icons.category;
+    }
   }
 } 

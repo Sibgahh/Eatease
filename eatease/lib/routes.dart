@@ -13,6 +13,8 @@ import 'screens/admin/user_management_screen.dart';
 import 'screens/customer/customer_home_screen.dart';
 import 'screens/customer/profile_screen.dart';
 import 'screens/customer/profile_navigation.dart';
+import 'screens/customer/customer_orders_screen.dart';
+import 'screens/customer/chat/customer_chat_screen.dart';
 
 // Merchant Screens
 import 'screens/merchant/merchant_home_screen.dart';
@@ -20,6 +22,8 @@ import 'screens/merchant/product_list_screen.dart';
 import 'screens/merchant/product_form_screen.dart';
 import 'screens/merchant/merchant_settings_screen.dart';
 import 'screens/merchant/merchant_orders_screen.dart';
+import 'screens/merchant/merchant_main_screen.dart';
+import 'screens/merchant/merchant_chat_screen.dart';
 
 // Shared Components 
 import 'screens/shared/auth_wrapper.dart';
@@ -39,6 +43,8 @@ class AppRoutes {
   
   // Customer Routes
   static const String customerProfile = '/customer/profile';
+  static const String customerOrders = '/customer/orders';
+  static const String customerChat = '/customer/chat';
   
   // Merchant Routes
   static const String merchantProducts = '/merchant/products';
@@ -46,6 +52,7 @@ class AppRoutes {
   static const String merchantProductsEdit = '/merchant/products/edit';
   static const String merchantSettings = '/merchant/settings';
   static const String merchantOrders = '/merchant/orders';
+  static const String merchantChat = '/merchant/chat';
   
   // Admin Routes
   static const String admin = '/admin';
@@ -83,11 +90,11 @@ final Map<String, WidgetBuilder> appRoutes = {
   },
   AppRoutes.merchant: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Home (${AppRoutes.merchant})');
-    return const MerchantHomeScreen();
+    return const MerchantMainScreen(initialTab: 0);
   }, 
   AppRoutes.merchantHome: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Home Alternative Route (${AppRoutes.merchantHome})');
-    return const MerchantHomeScreen();
+    return const MerchantMainScreen(initialTab: 0);
   },
   
   // Customer Routes
@@ -95,20 +102,32 @@ final Map<String, WidgetBuilder> appRoutes = {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Profile (${AppRoutes.customerProfile})');
     return const ProfileNavigation();
   },
+  AppRoutes.customerOrders: (context) {
+    print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Orders (${AppRoutes.customerOrders})');
+    return const CustomerOrdersScreen();
+  },
+  AppRoutes.customerChat: (context) {
+    print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Chat (${AppRoutes.customerChat})');
+    return const CustomerChatScreen();
+  },
   
   // Merchant Routes
   AppRoutes.merchantProducts: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Products (${AppRoutes.merchantProducts})');
-    return const ProductListScreen();
+    return const MerchantMainScreen(initialTab: 1);
   },
   AppRoutes.merchantProductsAdd: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Add Product Form (${AppRoutes.merchantProductsAdd})');
     return const ProductFormScreen();
   },
-  AppRoutes.merchantSettings: (context) => const MerchantSettingsScreen(),
+  AppRoutes.merchantSettings: (context) => const MerchantMainScreen(initialTab: 3),
   AppRoutes.merchantOrders: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Orders (${AppRoutes.merchantOrders})');
-    return const MerchantOrdersScreen();
+    return const MerchantMainScreen(initialTab: 2);
+  },
+  AppRoutes.merchantChat: (context) {
+    print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Chat (${AppRoutes.merchantChat})');
+    return const MerchantChatScreen();
   },
   
   // Admin Routes
