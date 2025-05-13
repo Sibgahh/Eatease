@@ -6,7 +6,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CustomerProfileScreen extends StatefulWidget {
-  const CustomerProfileScreen({super.key});
+  final bool showScaffold;
+  
+  const CustomerProfileScreen({
+    Key? key,
+    this.showScaffold = true,
+  }) : super(key: key);
 
   @override
   State<CustomerProfileScreen> createState() => _CustomerProfileScreenState();
@@ -279,6 +284,195 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Widget content = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Profile header
+                Center(
+                  child: Column(
+                    children: [
+                      // Profile image with neumorphic container
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: AppTheme.getNeumorphismDecoration(
+                          color: AppTheme.neumorphismBackground,
+                          borderRadius: 60,
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: AppTheme.neumorphismBackground,
+                              shape: BoxShape.circle,
+                            ),
+                            child: ClipOval(
+                              child: _photoUrl != null && _photoUrl!.isNotEmpty
+                                ? Image.network(
+                                    _photoUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.person,
+                                      size: 60,
+                                      color: AppTheme.textSecondaryColor,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.person,
+                                    size: 60,
+                                    color: AppTheme.textSecondaryColor,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _userName ?? 'User',
+                        style: AppTheme.headingMedium(),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _email ?? '',
+                        style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+                      ),
+                      const SizedBox(height: 30),
+                    ],
+                  ),
+                ),
+
+                // Profile form
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 20),
+                        child: Text(
+                          'Edit Profile',
+                          style: AppTheme.headingSmall(),
+                        ),
+                      ),
+                      
+                      // Display name field
+                      _buildNeumorphicTextField(
+                        controller: _displayNameController,
+                        label: 'Display Name',
+                        icon: Icons.person,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter your name';
+                          }
+                          return null;
+                        },
+                      ),
+                      
+                      // Phone number field
+                      _buildNeumorphicTextField(
+                        controller: _phoneNumberController,
+                        label: 'Phone Number',
+                        icon: Icons.phone,
+                        keyboardType: TextInputType.phone,
+                      ),
+                      
+                      const SizedBox(height: 30),
+                      
+                      // Save button
+                      _isSaving
+                        ? Center(
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: AppTheme.getNeumorphismDecoration(
+                                color: AppTheme.neumorphismBackground,
+                                borderRadius: 28,
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                          )
+                        : _buildNeumorphicButton(
+                            text: 'Save Changes',
+                            onPressed: _updateProfile,
+                            isPressed: _saveButtonPressed,
+                            onPressedChange: (value) => setState(() => _saveButtonPressed = value),
+                            textColor: Colors.white,
+                            backgroundColor: AppTheme.primaryColor,
+                          ),
+                      
+                      const SizedBox(height: 40),
+                      
+                      // Settings Options
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 20),
+                        child: Text(
+                          'Settings',
+                          style: AppTheme.headingSmall(),
+                        ),
+                      ),
+                      
+                      // Neumorphic list tiles
+                      _buildNeumorphicListTile(
+                        title: 'Notifications',
+                        icon: Icons.notifications_outlined,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Notifications coming soon!')),
+                          );
+                        },
+                      ),
+                      
+                      _buildNeumorphicListTile(
+                        title: 'Language',
+                        icon: Icons.language_outlined,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Language settings coming soon!')),
+                          );
+                        },
+                      ),
+                      
+                      _buildNeumorphicListTile(
+                        title: 'Privacy & Security',
+                        icon: Icons.lock_outline,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Privacy settings coming soon!')),
+                          );
+                        },
+                      ),
+                      
+                      const SizedBox(height: 40),
+                      
+                      // Sign out button
+                      _buildNeumorphicButton(
+                        text: 'Sign Out',
+                        onPressed: _signOut,
+                        isPressed: _signOutButtonPressed,
+                        onPressedChange: (value) => setState(() => _signOutButtonPressed = value),
+                        textColor: Colors.red.shade700,
+                        icon: Icons.logout,
+                      ),
+                      
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+    
+    if (!widget.showScaffold) {
+      return content;
+    }
+    
     return Scaffold(
       backgroundColor: AppTheme.neumorphismBackground,
       appBar: AppBar(
@@ -286,190 +480,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         backgroundColor: AppTheme.primaryColor,
         elevation: 0,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Profile header
-                  Center(
-                    child: Column(
-                      children: [
-                        // Profile image with neumorphic container
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: AppTheme.getNeumorphismDecoration(
-                            color: AppTheme.neumorphismBackground,
-                            borderRadius: 60,
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                color: AppTheme.neumorphismBackground,
-                                shape: BoxShape.circle,
-                              ),
-                              child: ClipOval(
-                                child: _photoUrl != null && _photoUrl!.isNotEmpty
-                                  ? Image.network(
-                                      _photoUrl!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(
-                                        Icons.person,
-                                        size: 60,
-                                        color: AppTheme.textSecondaryColor,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.person,
-                                      size: 60,
-                                      color: AppTheme.textSecondaryColor,
-                                    ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _userName ?? 'User',
-                          style: AppTheme.headingMedium(),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _email ?? '',
-                          style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
-                        ),
-                        const SizedBox(height: 30),
-                      ],
-                    ),
-                  ),
-
-                  // Profile form
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, bottom: 20),
-                          child: Text(
-                            'Edit Profile',
-                            style: AppTheme.headingSmall(),
-                          ),
-                        ),
-                        
-                        // Display name field
-                        _buildNeumorphicTextField(
-                          controller: _displayNameController,
-                          label: 'Display Name',
-                          icon: Icons.person,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter your name';
-                            }
-                            return null;
-                          },
-                        ),
-                        
-                        // Phone number field
-                        _buildNeumorphicTextField(
-                          controller: _phoneNumberController,
-                          label: 'Phone Number',
-                          icon: Icons.phone,
-                          keyboardType: TextInputType.phone,
-                        ),
-                        
-                        const SizedBox(height: 30),
-                        
-                        // Save button
-                        _isSaving
-                          ? Center(
-                              child: Container(
-                                width: 56,
-                                height: 56,
-                                decoration: AppTheme.getNeumorphismDecoration(
-                                  color: AppTheme.neumorphismBackground,
-                                  borderRadius: 28,
-                                ),
-                                child: const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              ),
-                            )
-                          : _buildNeumorphicButton(
-                              text: 'Save Changes',
-                              onPressed: _updateProfile,
-                              isPressed: _saveButtonPressed,
-                              onPressedChange: (value) => setState(() => _saveButtonPressed = value),
-                              textColor: Colors.white,
-                              backgroundColor: AppTheme.primaryColor,
-                            ),
-                        
-                        const SizedBox(height: 40),
-                        
-                        // Settings Options
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, bottom: 20),
-                          child: Text(
-                            'Settings',
-                            style: AppTheme.headingSmall(),
-                          ),
-                        ),
-                        
-                        // Neumorphic list tiles
-                        _buildNeumorphicListTile(
-                          title: 'Notifications',
-                          icon: Icons.notifications_outlined,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Notifications coming soon!')),
-                            );
-                          },
-                        ),
-                        
-                        _buildNeumorphicListTile(
-                          title: 'Language',
-                          icon: Icons.language_outlined,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Language settings coming soon!')),
-                            );
-                          },
-                        ),
-                        
-                        _buildNeumorphicListTile(
-                          title: 'Privacy & Security',
-                          icon: Icons.lock_outline,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Privacy settings coming soon!')),
-                            );
-                          },
-                        ),
-                        
-                        const SizedBox(height: 40),
-                        
-                        // Sign out button
-                        _buildNeumorphicButton(
-                          text: 'Sign Out',
-                          onPressed: _signOut,
-                          isPressed: _signOutButtonPressed,
-                          onPressedChange: (value) => setState(() => _signOutButtonPressed = value),
-                          textColor: Colors.red.shade700,
-                          icon: Icons.logout,
-                        ),
-                        
-                        const SizedBox(height: 32),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      body: content,
       bottomNavigationBar: FutureBuilder<String>(
         future: _authService.getUserRole(),
         builder: (context, snapshot) {

@@ -11,6 +11,7 @@ import 'screens/admin/user_management_screen.dart';
 
 // Customer Screens
 import 'screens/customer/customer_home_screen.dart';
+import 'screens/customer/customer_main_screen.dart';
 import 'screens/customer/profile_screen.dart';
 import 'screens/customer/profile_navigation.dart';
 import 'screens/customer/customer_orders_screen.dart';
@@ -82,11 +83,13 @@ final Map<String, WidgetBuilder> appRoutes = {
   // User Role-Based Home Screens
   AppRoutes.home: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Generic Home (${AppRoutes.home})');
-    return const CustomerHomeScreen();
+    return const CustomerMainScreen(initialTab: 0);
   }, // Fallback home
   AppRoutes.customer: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Home (${AppRoutes.customer})');
-    return const CustomerHomeScreen();
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final initialTab = args != null ? args['initialTab'] as int? ?? 0 : 0;
+    return CustomerMainScreen(initialTab: initialTab);
   },
   AppRoutes.merchant: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Home (${AppRoutes.merchant})');
@@ -100,15 +103,15 @@ final Map<String, WidgetBuilder> appRoutes = {
   // Customer Routes
   AppRoutes.customerProfile: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Profile (${AppRoutes.customerProfile})');
-    return const ProfileNavigation();
+    return const CustomerMainScreen(initialTab: 4);
   },
   AppRoutes.customerOrders: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Orders (${AppRoutes.customerOrders})');
-    return const CustomerOrdersScreen();
+    return const CustomerMainScreen(initialTab: 2);
   },
   AppRoutes.customerChat: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Chat (${AppRoutes.customerChat})');
-    return const CustomerChatScreen();
+    return const CustomerMainScreen(initialTab: 3);
   },
   
   // Merchant Routes

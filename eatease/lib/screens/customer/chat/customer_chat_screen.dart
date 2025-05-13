@@ -12,7 +12,12 @@ import '../../../widgets/bottom_nav_bar.dart';
 import 'chat_detail_screen.dart';
 
 class CustomerChatScreen extends StatefulWidget {
-  const CustomerChatScreen({Key? key}) : super(key: key);
+  final bool showScaffold;
+  
+  const CustomerChatScreen({
+    Key? key,
+    this.showScaffold = true,
+  }) : super(key: key);
 
   @override
   State<CustomerChatScreen> createState() => _CustomerChatScreenState();
@@ -25,6 +30,74 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Widget content = Column(
+      children: [
+        Expanded(
+          child: StreamBuilder<List<ChatConversationModel>>(
+            stream: _chatService.getConversations(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text('Error: ${snapshot.error}'),
+                );
+              }
+
+              final conversations = snapshot.data ?? [];
+
+              if (conversations.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 64,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No conversations yet',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Your conversations with merchants will appear here',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                itemCount: conversations.length,
+                itemBuilder: (context, index) {
+                  final conversation = conversations[index];
+                  return _buildConversationTile(conversation);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+    
+    if (!widget.showScaffold) {
+      return content;
+    }
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -33,69 +106,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
         ),
         backgroundColor: AppTheme.primaryColor,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<List<ChatConversationModel>>(
-              stream: _chatService.getConversations(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Error: ${snapshot.error}'),
-                  );
-                }
-
-                final conversations = snapshot.data ?? [];
-
-                if (conversations.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No conversations yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Your conversations with merchants will appear here',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade500,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: conversations.length,
-                  itemBuilder: (context, index) {
-                    final conversation = conversations[index];
-                    return _buildConversationTile(conversation);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+      body: content,
       bottomNavigationBar: const BottomNavBar(
         currentIndex: 3, // Chat tab is now at index 3
         userRole: 'customer',

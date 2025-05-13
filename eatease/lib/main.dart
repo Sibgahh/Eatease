@@ -20,6 +20,21 @@ import 'routes.dart';
 import 'widgets/connectivity_wrapper.dart';
 import 'services/chat_service.dart';
 
+// Custom page transition with no animation for customer pages
+class NoAnimationPageTransition extends PageTransitionsBuilder {
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // Return the child directly without animation
+    return child;
+  }
+}
+
 // Add RouteObserver to track navigation
 class NavigationObserver extends NavigatorObserver {
   @override
@@ -224,10 +239,29 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     print('[APP] Building main MaterialApp at ${DateTime.now().toIso8601String()}');
+    
+    // Get the base theme data from AppTheme
+    final baseTheme = AppTheme.getThemeData(context);
+    
+    // Add the page transitions theme to the base theme
+    final customTheme = baseTheme.copyWith(
+      pageTransitionsTheme: PageTransitionsTheme(
+        builders: {
+          // Use the NoAnimationPageTransition for all platforms
+          TargetPlatform.android: NoAnimationPageTransition(),
+          TargetPlatform.iOS: NoAnimationPageTransition(),
+          TargetPlatform.fuchsia: NoAnimationPageTransition(),
+          TargetPlatform.linux: NoAnimationPageTransition(),
+          TargetPlatform.macOS: NoAnimationPageTransition(),
+          TargetPlatform.windows: NoAnimationPageTransition(),
+        },
+      ),
+    );
+    
     return ConnectivityWrapper(
       child: MaterialApp(
         title: 'EatEase',
-        theme: AppTheme.getThemeData(context),
+        theme: customTheme,
         // Register the NavigationObserver
         navigatorObservers: [NavigationObserver()],
         initialRoute: AppRoutes.initial,

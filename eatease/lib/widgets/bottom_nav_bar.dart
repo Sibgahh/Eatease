@@ -17,11 +17,13 @@ import '../utils/app_theme.dart';
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
   final String userRole;
+  final Function(int)? onTabChange;
 
   const BottomNavBar({
     super.key,
     required this.currentIndex,
     required this.userRole,
+    this.onTabChange,
   });
 
   @override
@@ -158,6 +160,12 @@ class BottomNavBar extends StatelessWidget {
   void _navigateToPage(int index, BuildContext context) {
     if (currentIndex == index) return;
 
+    // If an onTabChange callback is provided, use it instead of navigation
+    if (onTabChange != null) {
+      onTabChange!(index);
+      return;
+    }
+
     if (userRole == 'customer') {
       _navigateCustomerPage(index, context);
     } else if (userRole == 'merchant') {
@@ -174,7 +182,6 @@ class BottomNavBar extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (context) => const CustomerHomeScreen(),
-            settings: const RouteSettings(name: '/customer'),
           ),
           (route) => false,
         );
@@ -184,7 +191,6 @@ class BottomNavBar extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (context) => const CartScreen(),
-            settings: const RouteSettings(name: '/cart'),
           ),
         );
         break;
@@ -193,7 +199,6 @@ class BottomNavBar extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (context) => const CustomerOrdersScreen(),
-            settings: const RouteSettings(name: '/orders'),
           ),
         );
         break;
@@ -202,7 +207,6 @@ class BottomNavBar extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (context) => const CustomerChatScreen(),
-            settings: const RouteSettings(name: '/customer/chat'),
           ),
         );
         break;
@@ -211,7 +215,6 @@ class BottomNavBar extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (context) => const CustomerProfileScreen(),
-            settings: const RouteSettings(name: '/profile'),
           ),
         );
         break;

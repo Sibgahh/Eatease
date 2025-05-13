@@ -8,7 +8,12 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CartScreen extends StatefulWidget {
-  const CartScreen({Key? key}) : super(key: key);
+  final bool showScaffold;
+  
+  const CartScreen({
+    Key? key,
+    this.showScaffold = true,
+  }) : super(key: key);
 
   @override
   State<CartScreen> createState() => _CartScreenState();
@@ -20,92 +25,102 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'My Cart',
-          style: TextStyle(fontWeight: FontWeight.bold),
+    // Use a conditional builder based on showScaffold
+    if (widget.showScaffold) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'My Cart',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppTheme.primaryColor,
+          actions: [
+            if (_cartService.itemCount > 0)
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _showClearCartDialog(),
+                tooltip: 'Clear Cart',
+              ),
+          ],
         ),
-        backgroundColor: AppTheme.primaryColor,
-        actions: [
-          if (_cartService.itemCount > 0)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _showClearCartDialog(),
-              tooltip: 'Clear Cart',
-            ),
-        ],
-      ),
-      body: StreamBuilder<List<CartItemModel>>(
-        stream: _cartService.cartStream,
-        initialData: _cartService.items,
-        builder: (context, snapshot) {
-          final cartItems = snapshot.data ?? [];
-          
-          if (cartItems.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.shopping_cart_outlined,
-                    size: 80,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Your cart is empty',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Add some delicious food to your cart',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('Continue Shopping'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: cartItems.length,
-                  itemBuilder: (context, index) {
-                    final item = cartItems[index];
-                    return _buildCartItem(item);
-                  },
+        body: _buildBody(),
+        bottomNavigationBar: BottomNavBar(
+          currentIndex: 1,
+          userRole: 'customer',
+        ),
+      );
+    } else {
+      // If showScaffold is false, just return the body content
+      return _buildBody();
+    }
+  }
+  
+  Widget _buildBody() {
+    return StreamBuilder<List<CartItemModel>>(
+      stream: _cartService.cartStream,
+      initialData: _cartService.items,
+      builder: (context, snapshot) {
+        final cartItems = snapshot.data ?? [];
+        
+        if (cartItems.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.shopping_cart_outlined,
+                  size: 80,
+                  color: Colors.grey.shade400,
                 ),
-              ),
-              _buildCartSummary(cartItems),
-            ],
+                const SizedBox(height: 16),
+                Text(
+                  'Your cart is empty',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add some delicious food to your cart',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Continue Shopping'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
           );
-        },
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 1,
-        userRole: 'customer',
-      ),
+        }
+
+        return Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: cartItems.length,
+                itemBuilder: (context, index) {
+                  final item = cartItems[index];
+                  return _buildCartItem(item);
+                },
+              ),
+            ),
+            _buildCartSummary(cartItems),
+          ],
+        );
+      },
     );
   }
 

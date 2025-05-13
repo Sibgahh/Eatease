@@ -10,7 +10,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'chat/chat_detail_screen.dart';
 
 class CustomerOrdersScreen extends StatefulWidget {
-  const CustomerOrdersScreen({super.key});
+  final bool showScaffold;
+  
+  const CustomerOrdersScreen({
+    Key? key,
+    this.showScaffold = true,
+  }) : super(key: key);
 
   @override
   State<CustomerOrdersScreen> createState() => _CustomerOrdersScreenState();
@@ -90,6 +95,24 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
 
   @override
   Widget build(BuildContext context) {
+    Widget content = TabBarView(
+      controller: _tabController,
+      children: [
+        // Active Orders Tab (pending, preparing, ready)
+        _buildOrdersTab(['pending', 'preparing', 'ready']),
+        
+        // Completed Orders Tab
+        _buildOrdersTab(['completed']),
+        
+        // Cancelled Orders Tab
+        _buildOrdersTab(['cancelled']),
+      ],
+    );
+    
+    if (!widget.showScaffold) {
+      return content;
+    }
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -109,19 +132,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
           tabs: _tabTitles.map((title) => Tab(text: title)).toList(),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Active Orders Tab (pending, preparing, ready)
-          _buildOrdersTab(['pending', 'preparing', 'ready']),
-          
-          // Completed Orders Tab
-          _buildOrdersTab(['completed']),
-          
-          // Cancelled Orders Tab
-          _buildOrdersTab(['cancelled']),
-        ],
-      ),
+      body: content,
       bottomNavigationBar: FutureBuilder<String>(
         future: _authService.getUserRole(),
         builder: (context, snapshot) {
