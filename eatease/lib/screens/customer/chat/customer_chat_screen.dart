@@ -97,7 +97,7 @@ class _CustomerChatScreenState extends State<CustomerChatScreen> {
         ],
       ),
       bottomNavigationBar: const BottomNavBar(
-        currentIndex: 3, // Chat tab
+        currentIndex: 3, // Chat tab is now at index 3
         userRole: 'customer',
       ),
     );

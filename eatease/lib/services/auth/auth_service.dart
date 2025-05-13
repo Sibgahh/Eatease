@@ -181,20 +181,33 @@ class AuthService {
     String role,
   ) async {
     try {
+      print("[AUTH_SERVICE] Starting user creation process");
+      print("[AUTH_SERVICE] Email: $email, Role: $role");
+      
       // Validate role
       if (!['admin', 'merchant', 'customer', 'user'].contains(role)) {
+        print("[AUTH_SERVICE] Invalid role: $role");
         throw Exception('Invalid role specified');
       }
       
+      print("[AUTH_SERVICE] Creating user with Firebase Auth");
       // Create user with Firebase Auth
       auth.UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
       
+      if (userCredential.user == null) {
+        throw Exception('Failed to create user account');
+      }
+      
+      print("[AUTH_SERVICE] User created with Firebase Auth: ${userCredential.user?.uid}");
+      
+      print("[AUTH_SERVICE] Updating display name");
       // Update display name
       await userCredential.user!.updateDisplayName(displayName);
       
+      print("[AUTH_SERVICE] Saving user data to Firestore");
       // Save user with role to Firestore
       DateTime now = DateTime.now();
       
@@ -216,39 +229,43 @@ class AuthService {
           .doc(userCredential.user!.uid)
           .set(newUser.toMap());
       
+      print("[AUTH_SERVICE] User data saved to Firestore");
+      
+      // Ensure we're signed in
+      if (_auth.currentUser == null) {
+        print("[AUTH_SERVICE] User not signed in, signing in now");
+        await _auth.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        print("[AUTH_SERVICE] User signed in successfully");
+      } else {
+        print("[AUTH_SERVICE] User already signed in");
+      }
+      
       return userCredential.user!.uid;
     } catch (e) {
+      print("[AUTH_SERVICE] Error creating user: $e");
+      // If we created the user but failed later, try to clean up
+      if (e is auth.FirebaseAuthException && e.code == 'email-already-in-use') {
+        throw Exception('This email is already registered');
+      }
       rethrow;
     }
   }
 
   // Check if user is admin
   Future<bool> isAdmin() async {
-    print("Checking if user is admin...");
-    if (currentUser == null) {
-      print("Current user is null, not an admin");
-      return false;
-    }
-    
     try {
-      print("Fetching user document for ${currentUser!.uid}");
-      final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
-      if (!userDoc.exists) {
-        print("User document does not exist");
+      final user = _auth.currentUser;
+      if (user == null) {
         return false;
       }
       
-      final userData = UserModel.fromMap(userDoc.data()!, userDoc.id);
-      
-      // Check if the user is an active admin or has admin role in their roles array
-      bool isActiveAdmin = userData.role == 'admin';
-      bool hasAdminRole = userData.roles?.contains('admin') ?? false;
-      
-      print("User active role: ${userData.role}, roles: ${userData.roles}, isAdmin: ${isActiveAdmin || hasAdminRole}");
-      
-      return isActiveAdmin || hasAdminRole;
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      return doc.exists && doc.data()?['role'] == 'admin';
     } catch (e) {
-      print('Error checking admin status: $e');
+      print('Error checking if user is admin: $e');
       return false;
     }
   }
@@ -294,7 +311,7 @@ class AuthService {
   }
 
   // Get merchant model for the current user
-  Future<MerchantModel?> getCurrentMerchantModel() async {
+  Future<MerchantModel?> getCurrentMerchantModel({bool forceRefresh = false}) async {
     if (currentUser == null) {
       return null;
     }
@@ -307,25 +324,31 @@ class AuthService {
       final cachedData = _memoryCache[cacheKey];
       final currentTime = DateTime.now().millisecondsSinceEpoch;
       
-      // If we have valid cached data that's less than 1 minute old, use it
-      if (cachedData != null && 
+      // If we have valid cached data that's less than 1 minute old and not forcing refresh, use it
+      if (!forceRefresh &&
+          cachedData != null && 
           cachedData['timestamp'] != null && 
           (currentTime - cachedData['timestamp'] < 60000)) {
+        print('Returning merchant data from cache');
         return cachedData['data'] as MerchantModel?;
       }
       
       // Otherwise, fetch from Firestore
+      print('Fetching merchant data from Firestore');
       final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
       if (!userDoc.exists) {
+        print('User document does not exist in Firestore');
         return null;
       }
       
       final userData = userDoc.data()!;
       if (userData['role'] != 'merchant') {
+        print('User is not a merchant');
         return null;
       }
       
       final merchantModel = MerchantModel.fromMap(userData, userDoc.id);
+      print('Merchant data fetched, isStoreActive: ${merchantModel.isStoreActive}');
       
       // Cache the result
       _memoryCache[cacheKey] = {
@@ -383,6 +406,56 @@ class AuthService {
       return false;
     }
   }
+  
+  // Update merchant store active status (open/close store)
+  Future<bool> updateMerchantStoreStatus(bool isActive) async {
+    if (currentUser == null) {
+      print('updateMerchantStoreStatus: No current user found');
+      return false;
+    }
+    
+    try {
+      final userRef = _firestore.collection('users').doc(currentUser!.uid);
+      print('updateMerchantStoreStatus: Attempting to update status to $isActive for user ${currentUser!.uid}');
+      
+      // First check if the document exists
+      final userDoc = await userRef.get();
+      
+      if (!userDoc.exists) {
+        print('updateMerchantStoreStatus: User document does not exist');
+        return false;
+      }
+      
+      // Update the document
+      await userRef.update({
+        'isStoreActive': isActive,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      print('updateMerchantStoreStatus: Successfully updated store status to $isActive in Firestore');
+      
+      // Update the in-memory cache
+      final cacheKey = '${currentUser!.uid}_merchant';
+      final cachedData = _memoryCache[cacheKey];
+      if (cachedData != null && cachedData['data'] is MerchantModel) {
+        final merchantModel = cachedData['data'] as MerchantModel;
+        _memoryCache[cacheKey] = {
+          'data': merchantModel.copyWith(isStoreActive: isActive),
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        };
+        print('updateMerchantStoreStatus: Updated in-memory cache');
+      } else {
+        print('updateMerchantStoreStatus: No cache to update or invalid cache data');
+        // Invalidate the cache to force a fresh load next time
+        _memoryCache.remove(cacheKey);
+      }
+      
+      return true;
+    } catch (e) {
+      print('Error updating merchant store status: $e');
+      return false;
+    }
+  }
 
   // Get current user's display name
   Future<String?> getCurrentUserName() async {
@@ -401,6 +474,20 @@ class AuthService {
     } catch (e) {
       print('Error getting user name: $e');
       return currentUser!.displayName;
+    }
+  }
+
+  // Get user data from Firestore
+  Future<Map<String, dynamic>?> getUserData(String userId) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      if (doc.exists) {
+        return doc.data();
+      }
+      return null;
+    } catch (e) {
+      print('Error getting user data: $e');
+      return null;
     }
   }
 } 

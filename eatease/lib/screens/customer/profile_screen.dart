@@ -25,6 +25,10 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   String? _phoneNumber;
   String? _photoUrl;
   
+  // Track button press states for neumorphic effect
+  bool _saveButtonPressed = false;
+  bool _signOutButtonPressed = false;
+  
   @override
   void initState() {
     super.initState();
@@ -165,9 +169,118 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     }
   }
 
+  // Custom neumorphic text field
+  Widget _buildNeumorphicTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? Function(String?)? validator,
+    TextInputType? keyboardType,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: AppTheme.getNeumorphismDecoration(
+        color: AppTheme.neumorphismBackground,
+        borderRadius: 16,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: AppTheme.primaryColor),
+          border: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
+        ),
+        validator: validator,
+        keyboardType: keyboardType,
+      ),
+    );
+  }
+  
+  // Custom neumorphic button
+  Widget _buildNeumorphicButton({
+    required String text,
+    required VoidCallback onPressed,
+    required bool isPressed,
+    required Function(bool) onPressedChange,
+    Color? textColor,
+    Color? backgroundColor,
+    IconData? icon,
+  }) {
+    return GestureDetector(
+      onTapDown: (_) => onPressedChange(true),
+      onTapUp: (_) {
+        onPressedChange(false);
+        onPressed();
+      },
+      onTapCancel: () => onPressedChange(false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: double.infinity,
+        height: 56,
+        decoration: AppTheme.getNeumorphismDecoration(
+          isPressed: isPressed,
+          color: backgroundColor ?? AppTheme.neumorphismBackground,
+          borderRadius: 16,
+        ),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  color: textColor ?? AppTheme.primaryColor,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                text,
+                style: AppTheme.buttonText(
+                  color: textColor ?? AppTheme.primaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // Custom neumorphic list tile
+  Widget _buildNeumorphicListTile({
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: AppTheme.getNeumorphismDecoration(
+        color: AppTheme.neumorphismBackground,
+        borderRadius: 16,
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: AppTheme.primaryColor),
+        title: Text(
+          title,
+          style: AppTheme.bodyLarge(),
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: AppTheme.textSecondaryColor),
+        onTap: onTap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.neumorphismBackground,
       appBar: AppBar(
         title: const Text('Profile Settings'),
         backgroundColor: AppTheme.primaryColor,
@@ -176,209 +289,182 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Profile header
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor,
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(20),
-                        bottomRight: Radius.circular(20),
-                      ),
-                    ),
+                  Center(
                     child: Column(
                       children: [
-                        // Profile image
+                        // Profile image with neumorphic container
                         Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                          width: 120,
+                          height: 120,
+                          decoration: AppTheme.getNeumorphismDecoration(
+                            color: AppTheme.neumorphismBackground,
+                            borderRadius: 60,
                           ),
-                          child: _photoUrl != null && _photoUrl!.isNotEmpty
-                              ? ClipOval(
-                                  child: Image.network(
-                                    _photoUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(
+                          child: Center(
+                            child: Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: AppTheme.neumorphismBackground,
+                                shape: BoxShape.circle,
+                              ),
+                              child: ClipOval(
+                                child: _photoUrl != null && _photoUrl!.isNotEmpty
+                                  ? Image.network(
+                                      _photoUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.person,
+                                        size: 60,
+                                        color: AppTheme.textSecondaryColor,
+                                      ),
+                                    )
+                                  : const Icon(
                                       Icons.person,
                                       size: 60,
-                                      color: Colors.grey,
+                                      color: AppTheme.textSecondaryColor,
                                     ),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.person,
-                                  size: 60,
-                                  color: Colors.grey,
-                                ),
+                              ),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           _userName ?? 'User',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                          style: AppTheme.headingMedium(),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           _email ?? '',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
-                          ),
+                          style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
                         ),
+                        const SizedBox(height: 30),
                       ],
                     ),
                   ),
 
                   // Profile form
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, bottom: 20),
+                          child: Text(
                             'Edit Profile',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: AppTheme.headingSmall(),
                           ),
-                          const SizedBox(height: 16),
-                          
-                          // Display name field
-                          TextFormField(
-                            controller: _displayNameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Display Name',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.person),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter your name';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          
-                          // Phone number field
-                          TextFormField(
-                            controller: _phoneNumberController,
-                            decoration: const InputDecoration(
-                              labelText: 'Phone Number',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.phone),
-                            ),
-                            keyboardType: TextInputType.phone,
-                          ),
-                          const SizedBox(height: 24),
-                          
-                          // Save button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _isSaving ? null : _updateProfile,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                        ),
+                        
+                        // Display name field
+                        _buildNeumorphicTextField(
+                          controller: _displayNameController,
+                          label: 'Display Name',
+                          icon: Icons.person,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your name';
+                            }
+                            return null;
+                          },
+                        ),
+                        
+                        // Phone number field
+                        _buildNeumorphicTextField(
+                          controller: _phoneNumberController,
+                          label: 'Phone Number',
+                          icon: Icons.phone,
+                          keyboardType: TextInputType.phone,
+                        ),
+                        
+                        const SizedBox(height: 30),
+                        
+                        // Save button
+                        _isSaving
+                          ? Center(
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: AppTheme.getNeumorphismDecoration(
+                                  color: AppTheme.neumorphismBackground,
+                                  borderRadius: 28,
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
                                 ),
                               ),
-                              child: _isSaving
-                                  ? const CircularProgressIndicator(color: Colors.white)
-                                  : const Text('Save Changes'),
+                            )
+                          : _buildNeumorphicButton(
+                              text: 'Save Changes',
+                              onPressed: _updateProfile,
+                              isPressed: _saveButtonPressed,
+                              onPressedChange: (value) => setState(() => _saveButtonPressed = value),
+                              textColor: Colors.white,
+                              backgroundColor: AppTheme.primaryColor,
                             ),
+                        
+                        const SizedBox(height: 40),
+                        
+                        // Settings Options
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, bottom: 20),
+                          child: Text(
+                            'Settings',
+                            style: AppTheme.headingSmall(),
                           ),
-                          
-                          const SizedBox(height: 32),
-                          // Additional options
-                          Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: Colors.grey.shade200),
-                            ),
-                            child: Column(
-                              children: [
-                                ListTile(
-                                  leading: const Icon(Icons.notifications_outlined),
-                                  title: const Text('Notifications'),
-                                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                                  onTap: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Notifications coming soon!')),
-                                    );
-                                  },
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.language_outlined),
-                                  title: const Text('Language'),
-                                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                                  onTap: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Language settings coming soon!')),
-                                    );
-                                  },
-                                ),
-                                const Divider(height: 1),
-                                ListTile(
-                                  leading: const Icon(Icons.lock_outline),
-                                  title: const Text('Privacy & Security'),
-                                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                                  onTap: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Privacy settings coming soon!')),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          
-                          const SizedBox(height: 24),
-                          
-                          // Sign out button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: OutlinedButton(
-                              onPressed: _signOut,
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.red.shade300),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: Text(
-                                'Sign Out',
-                                style: TextStyle(color: Colors.red.shade700),
-                              ),
-                            ),
-                          ),
-                          
-                          const SizedBox(height: 32),
-                        ],
-                      ),
+                        ),
+                        
+                        // Neumorphic list tiles
+                        _buildNeumorphicListTile(
+                          title: 'Notifications',
+                          icon: Icons.notifications_outlined,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Notifications coming soon!')),
+                            );
+                          },
+                        ),
+                        
+                        _buildNeumorphicListTile(
+                          title: 'Language',
+                          icon: Icons.language_outlined,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Language settings coming soon!')),
+                            );
+                          },
+                        ),
+                        
+                        _buildNeumorphicListTile(
+                          title: 'Privacy & Security',
+                          icon: Icons.lock_outline,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Privacy settings coming soon!')),
+                            );
+                          },
+                        ),
+                        
+                        const SizedBox(height: 40),
+                        
+                        // Sign out button
+                        _buildNeumorphicButton(
+                          text: 'Sign Out',
+                          onPressed: _signOut,
+                          isPressed: _signOutButtonPressed,
+                          onPressedChange: (value) => setState(() => _signOutButtonPressed = value),
+                          textColor: Colors.red.shade700,
+                          icon: Icons.logout,
+                        ),
+                        
+                        const SizedBox(height: 32),
+                      ],
                     ),
                   ),
                 ],
@@ -393,7 +479,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
           
           final userRole = snapshot.data ?? 'customer';
           return BottomNavBar(
-            currentIndex: 3, // Profile tab
+            currentIndex: 4, // Profile tab is now at index 4
             userRole: userRole,
           );
         },

@@ -24,6 +24,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
   final AuthService _authService = AuthService();
   bool _isLoading = true;
   String? _errorMessage;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey _streamBuilderKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +34,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         // Product list
         Expanded(
           child: StreamBuilder<List<ProductModel>>(
+            key: _streamBuilderKey,
             stream: _productService.getMerchantProducts(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -119,13 +122,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
                           width: double.infinity,
                           height: 50,
                           child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
+                            onPressed: () async {
+                              final productAdded = await Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => const ProductFormScreen(),
                                 ),
                               );
+                              
+                              // If a product was added, refresh the list
+                              if (productAdded == true) {
+                                setState(() {
+                                  // This will trigger a rebuild which will re-fetch the product list
+                                });
+                              }
                             },
                             icon: const Icon(Icons.add),
                             label: const Text(
@@ -331,8 +341,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                         ),
                                         child: IconButton(
                                           icon: Icon(Icons.edit, size: 18, color: Colors.blue.shade700),
-                                          onPressed: () {
-                                            Navigator.push(
+                                          onPressed: () async {
+                                            final productUpdated = await Navigator.push(
                                               context,
                                               MaterialPageRoute(
                                                 builder: (context) => ProductFormScreen(
@@ -340,6 +350,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                                 ),
                                               ),
                                             );
+                                            
+                                            // If the product was updated, refresh the list to ensure changes are visible
+                                            if (productUpdated == true) {
+                                              setState(() {
+                                                // This will trigger a rebuild which will re-fetch the product list
+                                              });
+                                            }
                                           },
                                           tooltip: 'Edit Product',
                                           constraints: const BoxConstraints(),
@@ -430,13 +447,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.add, size: 26),
-                  onPressed: () {
-                    Navigator.push(
+                  onPressed: () async {
+                    final productAdded = await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const ProductFormScreen(),
                       ),
                     );
+                    
+                    // If the product was added, refresh the list to ensure changes are visible
+                    if (productAdded == true) {
+                      setState(() {
+                        // This will trigger a rebuild which will re-fetch the product list
+                      });
+                    }
                   },
                 ),
               ],

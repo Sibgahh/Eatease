@@ -426,7 +426,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 backgroundColor: Colors.green,
               ),
             );
-            Navigator.pop(context);
+            // Close the form screen and indicate success
+            Navigator.pop(context, true);
           }
         } catch (e) {
           setState(() {
@@ -457,7 +458,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 backgroundColor: Colors.green,
               ),
             );
-            Navigator.pop(context);
+            // Close the form screen and refresh the product list
+            Navigator.pop(context, true); // Return true to indicate the product was updated
           }
         } catch (e) {
           setState(() {

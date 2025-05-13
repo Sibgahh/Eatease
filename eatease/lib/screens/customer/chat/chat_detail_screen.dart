@@ -278,7 +278,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         ),
         bottomNavigationBar: const BottomNavBar(
-          currentIndex: 3, // Chat tab
+          currentIndex: 3, // Profile tab (closest match)
           userRole: 'customer',
         ),
       );
@@ -529,7 +529,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         ),
         bottomNavigationBar: const BottomNavBar(
-          currentIndex: 3, // Chat tab
+          currentIndex: 3, // Profile tab (closest match)
           userRole: 'customer',
         ),
       ),

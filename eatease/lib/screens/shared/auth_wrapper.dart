@@ -31,92 +31,91 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    return ConnectivityWrapper(
+      child: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, userSnapshot) {
+          print("[AUTH_WRAPPER] Auth state changed: ${userSnapshot.connectionState}");
+          
+          // Show loading indicator while checking auth state
           if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-            );
-          }
-          
-        if (!userSnapshot.hasData || userSnapshot.data == null) {
-          return ConnectivityWrapper(
-            child: MaterialApp(
-              theme: AppTheme.getThemeData(context),
-              home: LoginScreen(onRegister: toggleView),
-            ),
-          );
-        }
-
-        return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('users')
-              .doc(userSnapshot.data!.uid)
-              .get(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
               body: Center(
-                  child: CircularProgressIndicator(),
+                child: CircularProgressIndicator(),
               ),
             );
           }
-          
-            if (!snapshot.hasData || !snapshot.data!.exists) {
-              return ConnectivityWrapper(
-                child: MaterialApp(
-                  theme: AppTheme.getThemeData(context),
-                  home: LoginScreen(onRegister: toggleView),
-                ),
+
+          // If user is not logged in, show login/register screen
+          if (!userSnapshot.hasData || userSnapshot.data == null) {
+            print("[AUTH_WRAPPER] No user logged in, showing auth screen");
+            return isLogin
+                ? LoginScreen(onRegister: toggleView)
+                : RegisterScreen(onLogin: toggleView);
+          }
+
+          // User is logged in, determine their role and navigate accordingly
+          print("[AUTH_WRAPPER] User logged in: ${userSnapshot.data!.uid}");
+          return FutureBuilder<String>(
+            future: _determineHomeRoute(AuthService()),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                print("[AUTH_WRAPPER] Error determining route: ${snapshot.error}");
+                return Scaffold(
+                  body: Center(
+                    child: Text('Error: ${snapshot.error}'),
+                  ),
+                );
+              }
+
+              final route = snapshot.data ?? AppRoutes.customer;
+              print("[AUTH_WRAPPER] Navigating to route: $route");
+              
+              return Navigator(
+                onGenerateRoute: (settings) {
+                  Widget page;
+                  switch (route) {
+                    case AppRoutes.admin:
+                      page = const AdminDashboard();
+                      break;
+                    case AppRoutes.merchant:
+                      page = const MerchantMainScreen();
+                      break;
+                    default:
+                      page = const CustomerHomeScreen();
+                  }
+                  return MaterialPageRoute(builder: (context) => page);
+                },
               );
-            }
-
-            final userData = snapshot.data!.data() as Map<String, dynamic>;
-            final role = userData['role'] as String? ?? 'customer';
-
-            // Load favorites for customer users
-            if (role == 'customer') {
-              FirebaseFirestore.instance
-                  .collection('userFavorites')
-                  .doc(userSnapshot.data!.uid)
-                  .get()
-                  .then((doc) {
-                if (doc.exists) {
-                  final favorites = List<String>.from(doc.data()?['favorites'] ?? []);
-                  CustomerHomeScreen.favoritesNotifier.value = favorites.toSet();
-                }
-              }).catchError((error) {
-                debugPrint('Error loading favorites: $error');
-              });
-            }
-
-            Widget homeScreen;
-            switch (role.toLowerCase()) {
-              case 'customer':
-                homeScreen = const CustomerHomeScreen();
-                break;
-              case 'merchant':
-                homeScreen = const MerchantMainScreen(initialTab: 0);
-                break;
-              case 'admin':
-                homeScreen = const AdminDashboard();
-                break;
-              default:
-                homeScreen = LoginScreen(onRegister: toggleView);
-          }
-
-            return ConnectivityWrapper(
-              child: MaterialApp(
-                theme: AppTheme.getThemeData(context, role: role),
-                home: homeScreen,
-              ),
-            );
-          },
-        );
-      },
+            },
+          );
+        },
+      ),
     );
+  }
+
+  Future<String> _determineHomeRoute(AuthService authService) async {
+    print("[AUTH_WRAPPER] Determining home route based on user role");
+    
+    if (await authService.isAdmin()) {
+      print("[AUTH_WRAPPER] User is an admin, routing to admin dashboard");
+      return AppRoutes.admin;
+    }
+    
+    if (await authService.isMerchant()) {
+      print("[AUTH_WRAPPER] User is a merchant, routing to merchant home");
+      return AppRoutes.merchant;
+    }
+    
+    print("[AUTH_WRAPPER] User is a customer, routing to customer home");
+    return AppRoutes.customer;
   }
 } 

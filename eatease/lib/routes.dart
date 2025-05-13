@@ -120,7 +120,10 @@ final Map<String, WidgetBuilder> appRoutes = {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Add Product Form (${AppRoutes.merchantProductsAdd})');
     return const ProductFormScreen();
   },
-  AppRoutes.merchantSettings: (context) => const MerchantMainScreen(initialTab: 3),
+  AppRoutes.merchantSettings: (context) {
+    print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Settings (${AppRoutes.merchantSettings})');
+    return const MerchantMainScreen(initialTab: 4);
+  },
   AppRoutes.merchantOrders: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Merchant Orders (${AppRoutes.merchantOrders})');
     return const MerchantMainScreen(initialTab: 2);

@@ -13,6 +13,9 @@ class SalesService {
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
   
+  // Status list for paid orders - we'll now only focus on completed orders
+  final List<String> _paidOrderStatuses = ['completed'];
+  
   // Get orders for the current merchant
   Stream<List<OrderModel>> getMerchantOrders() {
     if (currentUserId == null) {
@@ -30,6 +33,87 @@ class SalesService {
       });
   }
   
+  // Get total sales for the current merchant
+  Future<Map<String, dynamic>> getMerchantSalesStats() async {
+    if (currentUserId == null) {
+      return {
+        'totalSales': 0.0,
+        'totalOrders': 0,
+        'averageOrder': 0.0,
+        'todaySales': 0.0,
+        'todayOrders': 0,
+      };
+    }
+    
+    try {
+      print('SalesService: Fetching merchant sales stats for merchantId: $currentUserId');
+      
+      // Use a simpler query to avoid index issues - just get all orders for this merchant
+      final allOrdersSnapshot = await _orders
+        .where('merchantId', isEqualTo: currentUserId)
+        .get();
+      
+      print('SalesService: Retrieved ${allOrdersSnapshot.docs.length} total orders from Firestore');
+      
+      // Calculate total sales and orders - filter in memory
+      double totalSales = 0;
+      int totalOrders = 0;
+      
+      // Get today's date at the start of the day for filtering
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+      
+      // Today's sales
+      double todaySales = 0;
+      int todayOrders = 0;
+      
+      for (var doc in allOrdersSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final status = (data['status'] as String?)?.toLowerCase() ?? '';
+        final paymentStatus = (data['paymentStatus'] as String?)?.toLowerCase() ?? '';
+        final amount = (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        
+        // Only count completed orders with paid status
+        if (status == 'completed' && paymentStatus == 'paid') {
+          print('SalesService: Found completed order ${doc.id} - Amount: $amount');
+          
+          totalSales += amount;
+          totalOrders++;
+          
+          // Check if it's from today
+          if (createdAt != null && createdAt.isAfter(startOfDay)) {
+            todaySales += amount;
+            todayOrders++;
+          }
+        }
+      }
+      
+      // Calculate average order value
+      double averageOrder = totalOrders > 0 ? totalSales / totalOrders : 0;
+      
+      final result = {
+        'totalSales': totalSales,
+        'totalOrders': totalOrders,
+        'averageOrder': averageOrder,
+        'todaySales': todaySales,
+        'todayOrders': todayOrders,
+      };
+      
+      print('SalesService: Final sales stats (completed orders only): $result');
+      return result;
+    } catch (e) {
+      print('Error getting sales stats: $e');
+      return {
+        'totalSales': 0.0,
+        'totalOrders': 0,
+        'averageOrder': 0.0,
+        'todaySales': 0.0,
+        'todayOrders': 0,
+      };
+    }
+  }
+  
   // Get sales summary for the current merchant (by day for the last 7 days)
   Future<List<Map<String, dynamic>>> getMerchantSalesSummaryByDay() async {
     if (currentUserId == null) {
@@ -41,12 +125,12 @@ class SalesService {
       final now = DateTime.now();
       final sevenDaysAgo = now.subtract(const Duration(days: 7));
       
-      // Query completed orders from the last 7 days
+      // Use a simpler query to avoid index issues
       final snapshot = await _orders
         .where('merchantId', isEqualTo: currentUserId)
-        .where('status', isEqualTo: 'completed')
-        .where('completedAt', isGreaterThanOrEqualTo: sevenDaysAgo)
         .get();
+      
+      print('SalesService: Retrieved ${snapshot.docs.length} orders for sales summary');
       
       // Process the data to group by day
       Map<String, double> dailySales = {};
@@ -60,11 +144,24 @@ class SalesService {
         dailyOrders[dateString] = 0;
       }
       
-      // Sum up sales for each day
+      // Sum up sales for each day, filtering for completed and paid orders
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        final completedAt = (data['completedAt'] as Timestamp).toDate();
-        final dateString = '${completedAt.year}-${completedAt.month.toString().padLeft(2, '0')}-${completedAt.day.toString().padLeft(2, '0')}';
+        final status = (data['status'] as String?)?.toLowerCase() ?? '';
+        final paymentStatus = (data['paymentStatus'] as String?)?.toLowerCase() ?? '';
+        final createdAtTimestamp = data['createdAt'] as Timestamp?;
+        
+        // Skip if not a completed and paid order, or if older than 7 days
+        if (status != 'completed' || paymentStatus != 'paid' || createdAtTimestamp == null) {
+          continue;
+        }
+        
+        final orderDate = createdAtTimestamp.toDate();
+        if (orderDate.isBefore(sevenDaysAgo)) {
+          continue;
+        }
+        
+        final dateString = '${orderDate.year}-${orderDate.month.toString().padLeft(2, '0')}-${orderDate.day.toString().padLeft(2, '0')}';
         final amount = (data['totalAmount'] as num).toDouble();
         
         dailySales[dateString] = (dailySales[dateString] ?? 0) + amount;
@@ -91,75 +188,6 @@ class SalesService {
     }
   }
   
-  // Get total sales for the current merchant
-  Future<Map<String, dynamic>> getMerchantSalesStats() async {
-    if (currentUserId == null) {
-      return {
-        'totalSales': 0.0,
-        'totalOrders': 0,
-        'averageOrder': 0.0,
-        'todaySales': 0.0,
-        'todayOrders': 0,
-      };
-    }
-    
-    try {
-      // Get all completed orders
-      final allOrdersSnapshot = await _orders
-        .where('merchantId', isEqualTo: currentUserId)
-        .where('status', isEqualTo: 'completed')
-        .get();
-      
-      // Calculate total sales and orders
-      double totalSales = 0;
-      int totalOrders = allOrdersSnapshot.docs.length;
-      
-      for (var doc in allOrdersSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        totalSales += (data['totalAmount'] as num).toDouble();
-      }
-      
-      // Calculate average order value
-      double averageOrder = totalOrders > 0 ? totalSales / totalOrders : 0;
-      
-      // Get today's orders
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      
-      final todayOrdersSnapshot = await _orders
-        .where('merchantId', isEqualTo: currentUserId)
-        .where('status', isEqualTo: 'completed')
-        .where('completedAt', isGreaterThanOrEqualTo: startOfDay)
-        .get();
-      
-      // Calculate today's sales and orders
-      double todaySales = 0;
-      int todayOrders = todayOrdersSnapshot.docs.length;
-      
-      for (var doc in todayOrdersSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        todaySales += (data['totalAmount'] as num).toDouble();
-      }
-      
-      return {
-        'totalSales': totalSales,
-        'totalOrders': totalOrders,
-        'averageOrder': averageOrder,
-        'todaySales': todaySales,
-        'todayOrders': todayOrders,
-      };
-    } catch (e) {
-      print('Error getting sales stats: $e');
-      return {
-        'totalSales': 0.0,
-        'totalOrders': 0,
-        'averageOrder': 0.0,
-        'todaySales': 0.0,
-        'todayOrders': 0,
-      };
-    }
-  }
-  
   // Get top selling products
   Future<List<Map<String, dynamic>>> getTopSellingProducts({int limit = 5}) async {
     if (currentUserId == null) {
@@ -167,20 +195,29 @@ class SalesService {
     }
     
     try {
-      // Get all completed orders
+      // Use a simpler query to avoid index issues
       final ordersSnapshot = await _orders
         .where('merchantId', isEqualTo: currentUserId)
-        .where('status', isEqualTo: 'completed')
         .get();
+      
+      print('SalesService: Retrieved ${ordersSnapshot.docs.length} total orders for top products');
       
       // Count occurrences of each product
       Map<String, int> productCounts = {};
       Map<String, String> productNames = {};
       Map<String, double> productRevenue = {};
       
-      // Process each order
+      // Process each order - filter for completed orders in memory
       for (var doc in ordersSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        final status = (data['status'] as String?)?.toLowerCase() ?? '';
+        final paymentStatus = (data['paymentStatus'] as String?)?.toLowerCase() ?? '';
+        
+        // Skip orders that aren't completed and paid
+        if (status != 'completed' || paymentStatus != 'paid') {
+          continue;
+        }
+        
         final items = List<Map<String, dynamic>>.from(data['items'] ?? []);
         
         for (var item in items) {
@@ -213,6 +250,7 @@ class SalesService {
         result = result.sublist(0, limit);
       }
       
+      print('SalesService: Found ${result.length} top products');
       return result;
     } catch (e) {
       print('Error getting top selling products: $e');
@@ -227,15 +265,24 @@ class SalesService {
     }
     
     try {
+      // Use a simpler query to avoid index issues
       final snapshot = await _orders
         .where('merchantId', isEqualTo: currentUserId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
         .get();
       
-      return snapshot.docs.map((doc) {
+      // Convert to OrderModel list
+      final orders = snapshot.docs.map((doc) {
         return OrderModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
       }).toList();
+      
+      // Sort in memory by createdAt
+      orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      // Apply limit
+      final limitedOrders = orders.length > limit ? orders.sublist(0, limit) : orders;
+      
+      print('SalesService: Returning ${limitedOrders.length} latest transactions');
+      return limitedOrders;
     } catch (e) {
       print('Error getting latest transactions: $e');
       return [];

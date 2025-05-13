@@ -11,6 +11,7 @@ import '../../models/cart_item_model.dart';
 import 'cart_screen.dart';
 import 'store_detail_screen.dart';
 import 'dart:convert';
+import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -36,23 +37,111 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   ValueNotifier<Set<String>> get _favoriteItemsNotifier => CustomerHomeScreen.favoritesNotifier;
   Set<String> get _favoriteItems => _favoriteItemsNotifier.value;
   
-  final List<String> _categories = [
-    'All',
-    'Appetizer',
-    'Main Course',
-    'Dessert',
-    'Beverage',
-    'Sides',
-    'Breakfast',
-    'Fast Food',
+  // Scroll controller for implementing scroll-based pagination
+  final ScrollController _scrollController = ScrollController();
+  
+  // Pagination variables
+  bool _isLoadingMore = false;
+  bool _hasMoreProducts = true;
+  int _currentPage = 1;
+  final int _productsPerPage = 10;
+  
+  // Optimized product storage
+  final Map<String, ProductModel> _productsCache = {};
+  List<ProductModel>? _displayedProducts;
+  
+  // Store open status cache to avoid repeated network calls
+  final Map<String, bool> _storeOpenStatusCache = {};
+  
+  final List<Map<String, dynamic>> _categories = [
+    {
+      'name': 'All',
+      'emoji': '🍽️',
+      'color': Color(0xFF5C6BC0),
+    },
+    {
+      'name': 'Appetizer',
+      'emoji': '🍲',
+      'color': Color(0xFF26A69A),
+    },
+    {
+      'name': 'Main Course',
+      'emoji': '🥘',
+      'color': Color(0xFFFFA726),
+    },
+    {
+      'name': 'Dessert',
+      'emoji': '🍰',
+      'color': Color(0xFFEF5350),
+    },
+    {
+      'name': 'Beverage',
+      'emoji': '🥤',
+      'color': Color(0xFFEC407A),
+    },
+    {
+      'name': 'Sides',
+      'emoji': '🍟',
+      'color': Color(0xFF66BB6A),
+    },
+    {
+      'name': 'Breakfast',
+      'emoji': '🍳',
+      'color': Color(0xFFFFD54F),
+    },
+    {
+      'name': 'Fast Food',
+      'emoji': '🍔',
+      'color': Color(0xFFFF7043),
+    },
   ];
+
+  final List<Map<String, String>> _bannerImages = [
+    {
+      'image': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
+      'title': 'Delicious Food',
+    },
+    {
+      'image': 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800',
+      'title': 'Fine Dining',
+    },
+    {
+      'image': 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
+      'title': 'Restaurant Experience',
+    },
+    {
+      'image': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800',
+      'title': 'Gourmet Delights',
+    },
+  ];
+
+  int _currentBannerIndex = 0;
+
+  List<ProductModel>? _cachedProducts;
+  String _lastSearchQuery = '';
+  String _lastSelectedCategory = 'All';
+
+  String? _userRole;
+  bool _isLoadingRole = true;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     print('CUSTOMER HOME: Initializing customer home screen');
-    // Load saved favorites from Firestore
     _loadFavorites();
+    _initializeData();
+    _loadUserRole();
+    
+    // Add scroll listener for pagination
+    _scrollController.addListener(_scrollListener);
+  }
+  
+  void _scrollListener() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8 &&
+        !_isLoadingMore && _hasMoreProducts) {
+      _loadMoreProducts();
+    }
   }
   
   @override
@@ -63,6 +152,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _loadFavorites();
   }
   
+  @override
+  void dispose() {
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+  
+  Future<void> _initializeData() async {
+    await _loadProducts();
+    _applyFilters();
+  }
+
   // Load favorites from Firestore
   Future<void> _loadFavorites() async {
     try {
@@ -133,640 +235,640 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _saveFavorites();
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void _showProductDetails(ProductModel product) {
+    _getMerchantData(product.merchantId).then((merchantData) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => StoreDetailScreen(
+            merchantId: product.merchantId,
+            merchantName: merchantData['name'] ?? 'Local Restaurant',
+            merchantImage: merchantData['image'] ?? '',
+            merchantAddress: merchantData['address'] ?? 'No address available',
+            merchantRating: merchantData['rating'] ?? 4.5,
+            merchantReviewCount: merchantData['reviewCount'] ?? 0,
+            isOpen: merchantData['isOpen'] ?? true,
+            merchantCategory: merchantData['category'] ?? 'Restaurant',
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      setState(() {
+        _isRefreshing = true;
+      });
+      
+      final products = await _productService.getAllAvailableProducts().first;
+      
+      // Store products in memory cache for faster access
+      for (var product in products) {
+        _productsCache[product.id] = product;
+      }
+      
+      setState(() {
+        _cachedProducts = products;
+        _isRefreshing = false;
+        _currentPage = 1;
+        _hasMoreProducts = products.length >= _productsPerPage;
+      });
+      
+      // Apply current filters to the loaded products
+      _applyFilters();
+    } catch (e) {
+      print('Error loading products: $e');
+      setState(() {
+        _isRefreshing = false;
+      });
+    }
+  }
+
+  Future<void> _loadMoreProducts() async {
+    if (_isLoadingMore || !_hasMoreProducts) return;
+    
+    setState(() {
+      _isLoadingMore = true;
+    });
+    
+    try {
+      // In a real implementation, you would fetch the next page from your API
+      // For now, we'll simulate pagination with the existing list
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      final nextPage = _currentPage + 1;
+      final startIndex = _currentPage * _productsPerPage;
+      
+      // Get all filtered products first (apply the same filters)
+      final allFilteredProducts = _getFilteredProducts();
+      
+      // Simulate end of list when we reach the end of our data
+      if (allFilteredProducts.isNotEmpty && startIndex < allFilteredProducts.length) {
+        final endIndex = (startIndex + _productsPerPage <= allFilteredProducts.length) 
+            ? startIndex + _productsPerPage 
+            : allFilteredProducts.length;
+        
+        // Get the next page of products
+        final moreProducts = allFilteredProducts.sublist(startIndex, endIndex);
+        
+        // Load merchant data and sort properly
+        _loadMerchantDataForProducts(moreProducts).then((productsWithStoreStatus) {
+          // Sort with open stores first, closed stores at the bottom
+          productsWithStoreStatus.sort((a, b) {
+            final isOpenA = a['isOpen'] as bool;
+            final isOpenB = b['isOpen'] as bool;
+            
+            // Sort by isOpen status (true first, false last)
+            if (isOpenA != isOpenB) {
+              return isOpenA ? -1 : 1;
+            }
+            
+            // If both have same status, use the original sorting by name
+            final productA = a['product'] as ProductModel;
+            final productB = b['product'] as ProductModel;
+            return productA.name.compareTo(productB.name);
+          });
+          
+          // Extract just the product models from the sorted list
+          final sortedMoreProducts = productsWithStoreStatus.map((item) => item['product'] as ProductModel).toList();
+          
+          setState(() {
+            _currentPage = nextPage;
+            _hasMoreProducts = endIndex < allFilteredProducts.length;
+            
+            // Add to displayed products
+            if (_displayedProducts != null) {
+              _displayedProducts!.addAll(sortedMoreProducts);
+            }
+            _isLoadingMore = false;
+          });
+        });
+      } else {
+        setState(() {
+          _hasMoreProducts = false;
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading more products: $e');
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+  
+  void _applyFilters() {
+    if (_cachedProducts == null) {
+      _displayedProducts = [];
+      return;
+    }
+    
+    final filteredProducts = _cachedProducts!.where((product) {
+      bool matchesCategory = _selectedCategory == 'All' || product.category == _selectedCategory;
+      bool matchesSearch = _searchQuery.isEmpty || 
+          product.name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+          product.description.toLowerCase().contains(_searchQuery.toLowerCase());
+      
+      return matchesCategory && product.isAvailable && matchesSearch;
+    }).toList();
+    
+    // First apply initial sorting by name
+    filteredProducts.sort((a, b) => a.name.compareTo(b.name));
+    
+    // Then load store open/closed status for all products and re-sort
+    _loadMerchantDataForProducts(filteredProducts).then((productsWithStoreStatus) {
+      // Sort with open stores first, closed stores at the bottom
+      productsWithStoreStatus.sort((a, b) {
+        final isOpenA = a['isOpen'] as bool;
+        final isOpenB = b['isOpen'] as bool;
+        
+        // Sort by isOpen status (true first, false last)
+        if (isOpenA != isOpenB) {
+          return isOpenA ? -1 : 1;
+        }
+        
+        // If both have same status, use the original sorting by name
+        final productA = a['product'] as ProductModel;
+        final productB = b['product'] as ProductModel;
+        return productA.name.compareTo(productB.name);
+      });
+      
+      // Extract just the product models from the sorted list
+      final sortedProducts = productsWithStoreStatus.map((item) => item['product'] as ProductModel).toList();
+      
+      setState(() {
+        // For pagination, only display first page initially
+        _displayedProducts = sortedProducts.take(_productsPerPage).toList();
+        _currentPage = 1;
+        _hasMoreProducts = sortedProducts.length > _productsPerPage;
+      });
+    });
+  }
+  
+  // Helper method to load merchant data for a list of products
+  Future<List<Map<String, dynamic>>> _loadMerchantDataForProducts(List<ProductModel> products) async {
+    final result = <Map<String, dynamic>>[];
+    
+    // Create a map to avoid duplicate merchant data requests
+    final merchantDataCache = <String, Map<String, dynamic>>{};
+    
+    // Process each product
+    for (final product in products) {
+      // Check if we already have data for this merchant
+      if (!merchantDataCache.containsKey(product.merchantId)) {
+        merchantDataCache[product.merchantId] = await _getMerchantData(product.merchantId);
+      }
+      
+      final merchantData = merchantDataCache[product.merchantId]!;
+      final isOpen = merchantData['isOpen'] as bool? ?? true;
+      
+      // Update our store open status cache for future use
+      _storeOpenStatusCache[product.merchantId] = isOpen;
+      
+      result.add({
+        'product': product,
+        'isOpen': isOpen,
+      });
+    }
+    
+    return result;
+  }
+
+  List<ProductModel> _getFilteredProducts() {
+    if (_cachedProducts == null) return [];
+    
+    return _cachedProducts!.where((product) {
+      bool matchesCategory = _selectedCategory == 'All' || product.category == _selectedCategory;
+      bool matchesSearch = _searchQuery.isEmpty || 
+          product.name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+          product.description.toLowerCase().contains(_searchQuery.toLowerCase());
+      
+      return matchesCategory && product.isAvailable && matchesSearch;
+    }).toList();
+  }
+
+  Future<void> _loadUserRole() async {
+    try {
+      final role = await _authService.getUserRole();
+      if (mounted) {
+        setState(() {
+          _userRole = role;
+          _isLoadingRole = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading user role: $e');
+      if (mounted) {
+        setState(() {
+          _userRole = 'customer';
+          _isLoadingRole = false;
+        });
+      }
+    }
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return 'Good Morning';
+    } else if (hour < 17) {
+      return 'Good Afternoon';
+    } else {
+      return 'Good Evening';
+    }
+  }
+
+  String _getWelcomeMessage() {
+    final greeting = _getGreeting();
+    final displayName = _authService.currentUser?.displayName ?? 'Foodie';
+    return '$greeting, ${displayName.split(' ')[0]}';
   }
 
   @override
   Widget build(BuildContext context) {
-    print('CUSTOMER HOME: Building customer home screen');
-    
     return Scaffold(
-      appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.restaurant_menu, size: 24),
-            SizedBox(width: 8),
-            Text(
-              'EatEase',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppTheme.primaryColor,
-        elevation: 0,
-        actions: [
-          // Favorites button
-          IconButton(
-            icon: const Icon(Icons.favorite),
-            onPressed: () {
-              _showFavorites();
-            },
-            tooltip: 'Favorites',
-          ),
-          // Admin Panel Button (only visible to admins)
-          FutureBuilder<bool>(
-            future: _authService.isAdmin(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
-                return const SizedBox();
-              }
-              
-              return IconButton(
-                icon: const Icon(Icons.admin_panel_settings),
-                onPressed: () {
-                  print('CUSTOMER HOME: Admin button pressed, navigating to admin dashboard');
-                  Navigator.pushNamed(context, '/admin');
-                },
-                tooltip: 'Admin Dashboard',
-              );
-            },
-          ),
-        ],
-      ),
-      
-      body: Column(
-        children: [
-          // Welcome card
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.primaryColor,
-                  AppTheme.primaryColor.withOpacity(0.8),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      FutureBuilder<String?>(
-                        future: _authService.getCurrentUserName(),
-                        builder: (context, snapshot) {
-                          final userName = snapshot.data ?? 'Guest';
-                          return Text(
-                            'Halo, $userName!',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'What would you like to eat today?',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: const BoxDecoration(
-                    color: Colors.white24,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.fastfood_rounded,
-                    size: 30,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.trim().toLowerCase();
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Search for food...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                          });
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide(color: AppTheme.primaryColor),
-                ),
-              ),
-            ),
-          ),
-
-          // Category Selector
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withOpacity(0.05),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-              ),
-            ),
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Text(
-                    "Categories",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 55,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _categories.length,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemBuilder: (context, index) {
-                  final category = _categories[index];
-                  final isSelected = category == _selectedCategory;
-                  
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedCategory = category;
-                            });
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isSelected ? AppTheme.primaryColor : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                              boxShadow: isSelected ? [
-                                BoxShadow(
-                                  color: AppTheme.primaryColor.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
-                                )
-                              ] : [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.2),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                )
-                              ],
-                              border: Border.all(
-                          color: isSelected ? AppTheme.primaryColor : Colors.grey.shade300,
-                          width: 1,
-                        ),
-                      ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await _loadProducts();
+        },
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  // Banner Slider
+                  Container(
+                    width: MediaQuery.of(context).size.width,
+                    child: Stack(
+                      children: [
+                        // Banner slider
+                        FlutterCarousel(
+                          items: _bannerImages.map((banner) {
+                            return Stack(
+                              fit: StackFit.expand,
                               children: [
-                                Icon(
-                                  _getCategoryIcon(category),
-                                  size: 16,
-                                  color: isSelected ? Colors.white : Colors.grey.shade700,
+                                // Banner image
+                                Image.network(
+                                  banner['image']!,
+                                  fit: BoxFit.cover,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  category,
-                                  style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    fontSize: 12,
+                                // Gradient overlay
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.black.withOpacity(0.3),
+                                        Colors.black.withOpacity(0.6),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                // Banner content
+                                Positioned(
+                                  bottom: 20,
+                                  left: 20,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        banner['title']!,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          shadows: [
+                                            Shadow(
+                                              color: Colors.black54,
+                                              blurRadius: 3,
+                                              offset: Offset(1, 1),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
+                            );
+                          }).toList(),
+                          options: CarouselOptions(
+                            height: 250,
+                            viewportFraction: 1.0,
+                            autoPlay: true,
+                            autoPlayInterval: const Duration(seconds: 4),
+                            autoPlayAnimationDuration: const Duration(milliseconds: 800),
+                            autoPlayCurve: Curves.fastOutSlowIn,
+                            showIndicator: false,
+                            onPageChanged: (index, reason) {
+                              setState(() {
+                                _currentBannerIndex = index;
+                              });
+                            },
+                          ),
+                        ),
+                        
+                        // Add custom indicator manually
+                        Positioned(
+                          bottom: 10,
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: _bannerImages.asMap().entries.map((entry) {
+                              return Container(
+                                width: 8,
+                                height: 8,
+                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _currentBannerIndex == entry.key
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.5),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        
+                        // Safe area top padding
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            height: MediaQuery.of(context).padding.top,
+                            color: Colors.black.withOpacity(0.2),
+                          ),
+                        ),
+                        
+                        // App title and actions
+                        Positioned(
+                          top: MediaQuery.of(context).padding.top,
+                          left: 0,
+                          right: 0,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            child: Row(
+                              children: [
+                                const Spacer(),
+                                // Admin Panel Button (only visible to admins)
+                                FutureBuilder<bool>(
+                                  future: _authService.isAdmin(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
+                                      return const SizedBox();
+                                    }
+                                    
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.9),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: IconButton(
+                                        icon: Icon(
+                                          Icons.admin_panel_settings_rounded,
+                                          color: AppTheme.primaryColor,
+                                        ),
+                                        onPressed: () {
+                                          print('CUSTOMER HOME: Admin button pressed, navigating to admin dashboard');
+                                          Navigator.pushNamed(context, '/admin');
+                                        },
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
-                      ),
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Products Grid
-          Expanded(
-            child: StreamBuilder<List<ProductModel>>(
-              stream: _productService.getAllAvailableProducts(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Error: ${snapshot.error}'),
-                  );
-                }
-                
-                final allProducts = snapshot.data ?? [];
-                
-                // Filter products by category and search query
-                final filteredProducts = allProducts.where((product) {
-                  bool matchesCategory = _selectedCategory == 'All' || product.category == _selectedCategory;
-                  bool matchesSearch = _searchQuery.isEmpty || 
-                      product.name.toLowerCase().contains(_searchQuery) || 
-                      product.description.toLowerCase().contains(_searchQuery);
+                  ),
                   
-                  return matchesCategory && product.isAvailable && matchesSearch;
-                }).toList();
-                
-                if (filteredProducts.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  // Search bar
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: AppTheme.getNeumorphismDecoration(
+                              borderRadius: 50,
+                              color: Colors.white,
+                            ),
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Search for food...',
+                                prefixIcon: Icon(Icons.search_rounded, color: AppTheme.textSecondaryColor),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                              onChanged: _onSearchChanged,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Favorites button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.favorite_rounded,
+                              color: AppTheme.primaryColor,
+                            ),
+                            onPressed: () {
+                              _showFavorites();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Categories
+                  Container(
+                    height: 50,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _categories.length,
+                      itemBuilder: (context, index) {
+                        final category = _categories[index];
+                        final isSelected = category['name'] == _selectedCategory;
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _CategoryItem(
+                            category: category,
+                            isSelected: isSelected,
+                            onTap: () => _onCategorySelected(category['name']),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Products grid
+            _buildProductsGrid(),
+            
+            // Loading indicator for pagination
+            SliverToBoxAdapter(
+              child: _isLoadingMore 
+                ? Container(
+                    padding: const EdgeInsets.all(16.0),
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(),
+                  )
+                : const SizedBox(),
+            ),
+            
+            // Admin Mode Indicator (only visible to admins)
+            SliverToBoxAdapter(
+              child: FutureBuilder<bool>(
+                future: _authService.isAdmin(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
+                    return const SizedBox();
+                  }
+                  
+                  return Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Row(
                       children: [
                         const Icon(
-                          Icons.no_food,
-                          size: 64,
-                          color: Colors.grey,
+                          Icons.admin_panel_settings_rounded,
+                          color: Colors.amber,
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _searchQuery.isNotEmpty
-                              ? 'No food items matching "$_searchQuery"'
-                              : 'No food items available in this category',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                          ),
-                          textAlign: TextAlign.center,
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Admin Mode: Viewing as customer',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushReplacementNamed(context, '/admin');
+                          },
+                          child: const Text('Back to Admin'),
                         ),
                       ],
                     ),
                   );
-                }
-                
-                return ValueListenableBuilder<Set<String>>(
-                  valueListenable: _favoriteItemsNotifier, 
-                  builder: (context, _, __) {
-                    return GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.78,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = filteredProducts[index];
-                        return _buildFoodItemCard(product);
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          
-          // Admin Mode Indicator (only visible to admins)
-          FutureBuilder<bool>(
-            future: _authService.isAdmin(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting || snapshot.data != true) {
-                return const SizedBox();
-              }
-              
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade100,
-                  border: Border(top: BorderSide(color: Colors.amber.shade300)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.admin_panel_settings,
-                      color: Colors.amber,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Admin Mode: Viewing as customer',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushReplacementNamed(context, '/admin');
-                      },
-                      child: const Text('Back to Admin'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      bottomNavigationBar: FutureBuilder<String>(
-        future: _authService.getUserRole(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SizedBox();
-          }
-          
-          final userRole = snapshot.data ?? 'customer';
-          return BottomNavBar(
-            currentIndex: 0,
-            userRole: userRole,
-          );
-        },
-      ),
-    );
-  }
-  
-  Widget _buildFoodItemCard(ProductModel product) {
-    return Card(
-      elevation: 3,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: () {
-          // Navigate to the store details screen
-          _getMerchantData(product.merchantId).then((merchantData) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => StoreDetailScreen(
-                  merchantId: product.merchantId,
-                  merchantName: merchantData['name'] ?? 'Local Restaurant',
-                  merchantImage: merchantData['image'] ?? '',
-                  merchantAddress: merchantData['address'] ?? 'No address available',
-                  merchantRating: merchantData['rating'] ?? 4.5,
-                  merchantReviewCount: merchantData['reviewCount'] ?? 0,
-                  isOpen: merchantData['isOpen'] ?? true,
-                  merchantCategory: merchantData['category'] ?? 'Restaurant',
-                ),
-              ),
-            );
-          });
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Store name header
-            FutureBuilder<Map<String, dynamic>>(
-              future: _getMerchantData(product.merchantId),
-              builder: (context, snapshot) {
-                final merchantName = snapshot.data?['name'] ?? 'Local Restaurant';
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withOpacity(0.1),
-                    border: Border(
-                      bottom: BorderSide(
-                        color: AppTheme.primaryColor.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.store,
-                        size: 12,
-                        color: AppTheme.primaryColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          merchantName,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppTheme.primaryColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            
-            // Product Image
-            SizedBox(
-              height: 90,
-              width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  product.imageUrls.isNotEmpty
-                      ? Image.network(
-                          product.imageUrls.first,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(
-                              Icons.image_not_supported,
-                              size: 32,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        )
-                      : Container(
-                          color: Colors.grey.shade200,
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            size: 32,
-                            color: Colors.grey,
-                          ),
-                        ),
-                  // Favorite button
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 3,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            _toggleFavorite(product.id);
-                          },
-                          customBorder: const CircleBorder(),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ValueListenableBuilder<Set<String>>(
-                              valueListenable: _favoriteItemsNotifier,
-                              builder: (context, favorites, _) {
-                                final isFavorite = favorites.contains(product.id);
-                                return AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 300),
-                                  switchInCurve: Curves.elasticOut,
-                                  switchOutCurve: Curves.elasticIn,
-                                  transitionBuilder: (child, animation) {
-                                    return ScaleTransition(
-                                      scale: animation,
-                                      child: child,
-                                    );
-                                  },
-                                  child: Icon(
-                                    isFavorite
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    key: ValueKey<bool>(isFavorite),
-                                    color: isFavorite
-                                        ? Colors.red
-                                        : Colors.grey.shade600,
-                                    size: 20,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Product details
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(5.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Name
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                      child: Text(
-                        product.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    
-                    const Spacer(),
-                    
-                    // Price at the bottom
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                      child: Text(
-                        'Rp ${currencyFormat.format(product.price.toInt())}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: AppTheme.primaryColor,
-                        ),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 4),
-                    
-                    // Rating stars below price
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                      child: Row(
-                        children: [
-                          Icon(Icons.star, color: Colors.amber, size: 12),
-                          Icon(Icons.star, color: Colors.amber, size: 12),
-                          Icon(Icons.star, color: Colors.amber, size: 12),
-                          Icon(Icons.star, color: Colors.amber, size: 12),
-                          Icon(Icons.star_half, color: Colors.amber, size: 12),
-                          const SizedBox(width: 4),
-                          Text(
-                            '4.5',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            ' (120)',
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                },
               ),
             ),
           ],
+        ),
+      ),
+      bottomNavigationBar: _isLoadingRole
+          ? const SizedBox(height: 56)
+          : BottomNavBar(
+              currentIndex: 0,
+              userRole: _userRole ?? 'customer',
+            ),
+    );
+  }
+  
+  Widget _buildProductsGrid() {
+    if (_isRefreshing) {
+      return const SliverFillRemaining(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    if (_displayedProducts == null || _displayedProducts!.isEmpty) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_off_rounded,
+                size: 64,
+                color: AppTheme.textSecondaryColor,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No products found',
+                style: AppTheme.headingSmall(
+                  color: AppTheme.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // Pre-fetch store open status for all displayed products
+    for (var product in _displayedProducts!) {
+      _getStoreOpenStatus(product.merchantId);
+    }
+    
+    return SliverPadding(
+      padding: const EdgeInsets.all(16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.75,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final product = _displayedProducts![index];
+            
+            return FutureBuilder<bool>(
+              // Use our cached method instead of direct call
+              future: _getStoreOpenStatus(product.merchantId),
+              // Default to true while loading to avoid UI flicker
+              initialData: _storeOpenStatusCache[product.merchantId],
+              builder: (context, snapshot) {
+                final isStoreOpen = snapshot.data ?? true;
+                return _ProductCard(
+                  product: product,
+                  currencyFormat: currencyFormat,
+                  isFavorite: _favoriteItems.contains(product.id),
+                  onToggleFavorite: () => _toggleFavorite(product.id),
+                  onTap: () => _showProductDetails(product),
+                  isStoreOpen: isStoreOpen,
+                );
+              }
+            );
+          },
+          childCount: _displayedProducts!.length,
         ),
       ),
     );
@@ -784,7 +886,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           'address': data['storeAddress'] ?? 'No address available',
           'rating': data['rating']?.toDouble() ?? 4.5,
           'reviewCount': data['reviewCount'] ?? 0,
-          'isOpen': data['isOpen'] ?? true,
+          'isOpen': data['isStoreActive'] ?? true,
           'category': data['storeCategory'] ?? 'Restaurant',
         };
       }
@@ -841,7 +943,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               Row(
                 children: [
                   Icon(
-                    Icons.favorite,
+                    Icons.favorite_rounded,
                     color: Colors.red,
                     size: 24,
                   ),
@@ -876,7 +978,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.favorite_border,
+                              Icons.favorite_border_rounded,
                               size: 64,
                               color: Colors.grey,
                             ),
@@ -1047,7 +1149,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 duration: const Duration(milliseconds: 300),
                                 child: Icon(
                                   favoriteIds.contains(product.id) ? 
-                                    Icons.favorite : Icons.favorite_border,
+                                    Icons.favorite_rounded : Icons.favorite_border_rounded,
                                   color: favoriteIds.contains(product.id) ? 
                                     Colors.red : Colors.grey.shade600,
                                   key: ValueKey<bool>(favoriteIds.contains(product.id)),
@@ -1074,25 +1176,362 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   IconData _getCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'all':
-        return Icons.restaurant_menu;
-      case 'appetizer':
-        return Icons.tapas;
-      case 'main course':
-        return Icons.dinner_dining;
-      case 'dessert':
-        return Icons.cake;
-      case 'beverage':
-        return Icons.local_cafe;
-      case 'sides':
-        return Icons.rice_bowl;
-      case 'breakfast':
-        return Icons.egg;
-      case 'fast food':
-        return Icons.fastfood;
-      default:
-        return Icons.category;
+    final categoryData = _categories.firstWhere(
+      (c) => c['name'].toLowerCase() == category.toLowerCase(),
+      orElse: () => _categories[0],
+    );
+    return categoryData['icon'];
+  }
+
+  // Update the search and category selection methods
+  void _onSearchChanged(String value) {
+    if (_lastSearchQuery != value) {
+      setState(() {
+        _searchQuery = value;
+        _lastSearchQuery = value;
+        _applyFilters();
+      });
     }
+  }
+
+  void _onCategorySelected(String category) {
+    if (_lastSelectedCategory != category) {
+      setState(() {
+        _selectedCategory = category;
+        _lastSelectedCategory = category;
+        _applyFilters();
+      });
+    }
+  }
+
+  // Method to get store open status with caching
+  Future<bool> _getStoreOpenStatus(String merchantId) async {
+    // Check if we already have this status cached
+    if (_storeOpenStatusCache.containsKey(merchantId)) {
+      return _storeOpenStatusCache[merchantId]!;
+    }
+    
+    // If not cached, fetch it and cache the result
+    final merchantData = await _getMerchantData(merchantId);
+    final isOpen = merchantData['isOpen'] as bool? ?? true;
+    _storeOpenStatusCache[merchantId] = isOpen;
+    return isOpen;
+  }
+}
+
+// Extract category item to a separate stateless widget to prevent unnecessary rebuilds
+class _CategoryItem extends StatelessWidget {
+  final Map<String, dynamic> category;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _CategoryItem({
+    required this.category, 
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 1.0, end: isSelected ? 1.05 : 1.0),
+      curve: Curves.elasticOut,
+      duration: const Duration(milliseconds: 300),
+      builder: (context, scale, child) {
+        return Transform.scale(
+          scale: scale,
+          child: GestureDetector(
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? category['color'] : Colors.white,
+                borderRadius: BorderRadius.circular(50),
+                border: Border.all(
+                  color: isSelected ? Colors.transparent : category['color'].withOpacity(0.3),
+                  width: 1.5,
+                ),
+                boxShadow: isSelected ? [
+                  BoxShadow(
+                    color: category['color'].withOpacity(0.4),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ] : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (category['emoji'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Text(
+                        category['emoji'],
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  Text(
+                    category['name'],
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? Colors.white : category['color'],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Extract product card to a separate widget to prevent unnecessary rebuilds
+class _ProductCard extends StatelessWidget {
+  final ProductModel product;
+  final NumberFormat currencyFormat;
+  final bool isFavorite;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onTap;
+  final bool isStoreOpen;
+
+  const _ProductCard({
+    required this.product,
+    required this.currencyFormat,
+    required this.isFavorite,
+    required this.onToggleFavorite,
+    required this.onTap,
+    required this.isStoreOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Product image
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: SizedBox(
+                    height: 110,
+                    width: double.infinity,
+                    child: product.imageUrls.isNotEmpty
+                        ? Image.network(
+                            product.imageUrls.first,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(
+                                Icons.image_not_supported,
+                                size: 32,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(
+                              Icons.image_not_supported,
+                              size: 32,
+                              color: Colors.grey,
+                            ),
+                          ),
+                  ),
+                ),
+                // Favorite button
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: onToggleFavorite,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 20,
+                        color: isFavorite ? Colors.red : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+                // Add closed indicator on the image if store is closed
+                if (!isStoreOpen)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'Closed',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            
+            // Product details
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      product.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    // Rating stars instead of description
+                    Row(
+                      children: [
+                        ...List.generate(5, (index) {
+                          // Calculate rating (random between 3.0-5.0 for demo purposes)
+                          // In real app, you'd use actual product rating
+                          final rating = (product.id.hashCode % 20 + 30) / 10;
+                          return Icon(
+                            index < rating.floor()
+                                ? Icons.star
+                                : (index < rating.ceil() && index >= rating.floor())
+                                    ? Icons.star_half
+                                    : Icons.star_border,
+                            size: 13,
+                            color: Colors.amber,
+                          );
+                        }),
+                        const SizedBox(width: 3),
+                        Text(
+                          ((product.id.hashCode % 20 + 30) / 10).toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    // Spacer to push the category and price to the bottom
+                    const Spacer(),
+                    
+                    // Category chip
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _getCategoryColor(product.category).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _getCategoryColor(product.category).withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        product.category,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w500,
+                          color: _getCategoryColor(product.category),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 4),
+                    
+                    // Price and closed status in a row to save vertical space
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Rp ${currencyFormat.format(product.price)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isStoreOpen ? AppTheme.primaryColor : Colors.grey,
+                            ),
+                          ),
+                        ),
+                        // Show closed text inline if store is closed
+                        if (!isStoreOpen)
+                          Text(
+                            'Closed',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.red.shade400,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Helper method to get color for a category
+  Color _getCategoryColor(String category) {
+    final Map<String, Color> categoryColors = {
+      'All': Color(0xFF5C6BC0),
+      'Appetizer': Color(0xFF26A69A),
+      'Main Course': Color(0xFFFFA726),
+      'Dessert': Color(0xFFEF5350),
+      'Beverage': Color(0xFFEC407A),
+      'Sides': Color(0xFF66BB6A),
+      'Breakfast': Color(0xFFFFD54F),
+      'Fast Food': Color(0xFFFF7043),
+    };
+    
+    // Return default color from map or a fallback color
+    return categoryColors[category] ?? AppTheme.primaryColor;
   }
 } 

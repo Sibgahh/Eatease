@@ -36,15 +36,39 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab;
+    
+    // Initialize the tab controller if needed
     if (_currentIndex == 2) {
       _ordersTabController = TabController(length: 3, vsync: this);
     }
+    
+    // Add a post-frame callback to ensure the tab controller is fully initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_currentIndex == 2 && _ordersTabController == null) {
+        setState(() {
+          _ordersTabController = TabController(length: 3, vsync: this);
+        });
+      }
+    });
   }
   
   @override
   void dispose() {
     _ordersTabController?.dispose();
     super.dispose();
+  }
+
+  // Method to handle changing tabs
+  void _changeTab(int index) {
+    setState(() {
+      // Convert bottom nav index to internal index
+      _currentIndex = _mapNewToOldIndex(index);
+      
+      // Initialize the orders tab controller if needed
+      if (_currentIndex == 2 && _ordersTabController == null) {
+        _ordersTabController = TabController(length: 3, vsync: this);
+      }
+    });
   }
   
   // Get the appropriate AppBar for the current tab
@@ -140,6 +164,20 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           backgroundColor: AppTheme.primaryColor,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                // Refresh by rebuilding the screen
+                if (mounted) {
+                  setState(() {
+                    // Trigger rebuild
+                  });
+                }
+              },
+              tooltip: 'Refresh',
+            ),
+          ],
         );
       case 4: // Settings tab
         return AppBar(
@@ -178,9 +216,10 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
           return const Center(child: CircularProgressIndicator());
         }
       case 3:
+        // Chat screen
         return const MerchantChatScreen(showScaffold: false);
       case 4:
-        // Pre-load the settings screen for smoother navigation
+        // Settings screen
         return const MerchantSettingsScreen(showScaffold: false);
       default:
         return const Center(child: Text('Unknown tab'));
@@ -194,29 +233,124 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
       _ordersTabController = TabController(length: 3, vsync: this);
     }
     
+    // Use the index mapping for consistent navigation
+    int navBarIndex = _mapOldIndexToNew(_currentIndex);
+    
     return Scaffold(
       appBar: _getAppBar(),
       body: _getBody(),
-      bottomNavigationBar: FutureBuilder<String>(
-        future: _authService.getUserRole(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SizedBox();
-          }
-          
-          final userRole = snapshot.data ?? 'merchant';
-          return BottomNavBar(
-            currentIndex: _currentIndex,
-            userRole: userRole,
-            onTabChanged: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-            },
-          );
-        },
+      bottomNavigationBar: Container(
+        height: 60,
+        margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildNavItem(icon: Icons.home_rounded, index: 0, isSelected: navBarIndex == 0),
+            _buildNavItem(icon: Icons.restaurant_menu_rounded, index: 1, isSelected: navBarIndex == 1),
+            _buildNavItem(icon: Icons.receipt_long_rounded, index: 2, isSelected: navBarIndex == 2),
+            _buildNavItem(icon: Icons.chat_rounded, index: 3, isSelected: navBarIndex == 3),
+            _buildNavItem(icon: Icons.settings_rounded, index: 4, isSelected: navBarIndex == 4),
+          ],
+        ),
       ),
     );
+  }
+  
+  Widget _buildNavItem({required IconData icon, required int index, required bool isSelected}) {
+    final Color primaryColor = AppTheme.getPrimaryColor('merchant');
+    
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            if (!isSelected) {
+              _changeTab(index);
+            }
+          },
+          customBorder: const StadiumBorder(),
+          splashColor: primaryColor.withOpacity(0.1),
+          highlightColor: Colors.transparent,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(30),
+              color: Colors.transparent,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  height: isSelected ? 3 : 0,
+                  width: 20,
+                  margin: isSelected ? const EdgeInsets.only(bottom: 4) : EdgeInsets.zero,
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                Icon(
+                  icon,
+                  color: isSelected ? primaryColor : Colors.grey.shade400,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Map old indices to new ones (for bottom nav)
+  int _mapOldIndexToNew(int oldIndex) {
+    switch (oldIndex) {
+      case 0: // Home -> Home (index 0) 
+        return 0;
+      case 1: // Products -> Products (index 1)
+        return 1; 
+      case 2: // Orders -> Orders (index 2)
+        return 2;
+      case 3: // Chat -> Chat (index 3)
+        return 3;
+      case 4: // Settings -> Settings (index 4)
+        return 4;
+      default:
+        return 0; // Default to Home
+    }
+  }
+  
+  // Map new indices to old ones (for changing tabs)
+  int _mapNewToOldIndex(int navIndex) {
+    switch (navIndex) {
+      case 0: // Home navigation -> Home content (0)
+        return 0;
+      case 1: // Products navigation -> Products content (1)
+        return 1;
+      case 2: // Orders navigation -> Orders content (2)
+        return 2;
+      case 3: // Chat navigation -> Chat content (3)
+        return 3;
+      case 4: // Settings navigation -> Settings content (4)
+        return 4;
+      default:
+        return 0;
+    }
   }
 }
 

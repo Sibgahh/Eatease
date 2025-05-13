@@ -20,6 +20,96 @@ class ChatService {
   CollectionReference get _conversations => _firestore.collection('chat_conversations');
   CollectionReference get _users => _firestore.collection('users');
   
+  // Create or get an order-specific conversation
+  Future<String> createOrGetOrderConversation(String customerId, String merchantId, String orderId) async {
+    try {
+      if (customerId.isEmpty || merchantId.isEmpty || orderId.isEmpty) {
+        throw Exception('Invalid user IDs or order ID provided');
+      }
+      
+      // Check if there's already a conversation for this order
+      final query = await _conversations
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+      
+      if (query.docs.isNotEmpty) {
+        return query.docs.first.id;
+      }
+      
+      // Get user details
+      final customerDetails = await getUserDetails(customerId);
+      final merchantDetails = await getUserDetails(merchantId);
+      
+      // Create new conversation
+      final conversationData = {
+        'customerId': customerId,
+        'merchantId': merchantId,
+        'customerName': customerDetails['name'],
+        'merchantName': merchantDetails['name'],
+        'customerImage': customerDetails['image'],
+        'merchantImage': merchantDetails['image'],
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessage': '',
+        'unreadCount': 0,
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'expirationTime': Timestamp.fromDate(DateTime.now().add(const Duration(days: 7))),
+        'lastMessageSenderId': customerId,
+        'lastMessageSenderRole': 'customer',
+        'orderId': orderId,
+        'isOrderChat': true,
+      };
+      
+      final docRef = await _conversations.add(conversationData);
+      return docRef.id;
+    } catch (e) {
+      print('Error creating order conversation: $e');
+      throw Exception('Failed to create order conversation: ${e.toString()}');
+    }
+  }
+  
+  // Delete conversation related to a completed order
+  Future<void> deleteOrderConversation(String orderId) async {
+    try {
+      // Find the conversation for this order
+      final conversationQuery = await _conversations
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+      
+      if (conversationQuery.docs.isEmpty) {
+        print('No conversation found for order $orderId');
+        return;
+      }
+      
+      final conversationDoc = conversationQuery.docs.first;
+      final conversationId = conversationDoc.id;
+      final chatId = ChatMessageModel.createChatId(
+          conversationDoc['customerId'], conversationDoc['merchantId']);
+      
+      // Delete all messages
+      final messagesQuery = await _messages
+          .where('chatId', isEqualTo: chatId)
+          .get();
+      
+      final batch = _firestore.batch();
+      
+      for (final messageDoc in messagesQuery.docs) {
+        batch.delete(messageDoc.reference);
+      }
+      
+      // Delete the conversation
+      batch.delete(conversationDoc.reference);
+      
+      // Execute batch
+      await batch.commit();
+      print('Successfully deleted conversation for order $orderId');
+    } catch (e) {
+      print('Error deleting order conversation: $e');
+    }
+  }
+  
   // Clean up expired conversations
   Future<void> cleanupExpiredConversations() async {
     try {

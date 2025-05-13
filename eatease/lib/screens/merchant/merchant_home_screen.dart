@@ -29,6 +29,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   final SalesService _salesService = SalesService();
   bool _isLoading = true;
   bool _isStoreConfigured = false;
+  bool _isStoreActive = false;
+  bool _isUpdatingStatus = false;
   String _merchantName = 'Merchant';
   
   // Currency formatter for Rupiah
@@ -66,54 +68,116 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   @override
   void initState() {
     super.initState();
+    print('MerchantHomeScreen: initState called');
     _loadData();
   }
   
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    print('MerchantHomeScreen: didChangeDependencies called');
+    // This ensures data is refreshed when navigating back to this screen
+    if (!_isLoading) {
+      _loadData();
+    }
+  }
+  
   Future<void> _loadData() async {
+    print('Loading merchant dashboard data');
     setState(() {
       _isLoading = true;
     });
     
     try {
-      // Load merchant data
-      final merchantModel = await _authService.getCurrentMerchantModel();
-      
-      if (merchantModel != null) {
-        setState(() {
-          _isStoreConfigured = merchantModel.isStoreConfigured();
-          _merchantName = merchantModel.displayName;
-        });
-        
-        if (!_isStoreConfigured && mounted) {
-          // Navigate to settings screen after a short delay for setup
-          Future.delayed(const Duration(milliseconds: 500), () {
-            Navigator.pushReplacement(
-              context, 
-              MaterialPageRoute(
-                builder: (context) => const MerchantSettingsScreen(redirectedForSetup: true),
-              ),
-            );
+      // Load merchant data - force a fresh load from the server
+      await _authService.getCurrentMerchantModel(forceRefresh: true).then((merchantModel) {
+        if (merchantModel != null) {
+          setState(() {
+            _isStoreConfigured = merchantModel.isStoreConfigured();
+            _merchantName = merchantModel.displayName;
+            _isStoreActive = merchantModel.isStoreActive;
           });
-          return;
+          
+          print('Merchant data loaded, isStoreActive: ${merchantModel.isStoreActive}');
+          
+          if (!_isStoreConfigured && mounted) {
+            // Navigate to settings screen after a short delay for setup
+            Future.delayed(const Duration(milliseconds: 500), () {
+              Navigator.pushReplacement(
+                context, 
+                MaterialPageRoute(
+                  builder: (context) => const MerchantSettingsScreen(redirectedForSetup: true),
+                ),
+              );
+            });
+            return;
+          }
+        } else {
+          print('No merchant data found');
         }
-      }
+      });
       
-      // Load sales statistics
+      // Load sales statistics - adding print statements for debugging
+      print('Fetching sales statistics...');
+      
+      // Clear existing data to ensure we're not showing stale data
+      setState(() {
+        _salesStats = {
+          'totalSales': 0.0,
+          'totalOrders': 0,
+          'averageOrder': 0.0,
+          'todaySales': 0.0,
+          'todayOrders': 0,
+        };
+        _salesData = [];
+        _topProducts = [];
+        _latestTransactions = [];
+      });
+      
       final salesStats = await _salesService.getMerchantSalesStats();
+      print('Sales stats loaded: $salesStats');
+      
       final salesData = await _salesService.getMerchantSalesSummaryByDay();
+      print('Sales data by day loaded: ${salesData.length} days');
+      
       final topProducts = await _salesService.getTopSellingProducts();
+      print('Top products loaded: ${topProducts.length} products');
+      
       final latestTransactions = await _salesService.getLatestTransactions();
+      print('Latest transactions loaded: ${latestTransactions.length} transactions');
       
       if (mounted) {
+        // Update the state with fresh data
         setState(() {
           _salesStats = salesStats;
           _salesData = salesData;
           _topProducts = topProducts;
           _latestTransactions = latestTransactions;
+          
+          // Set fixed values for testing if needed
+          // Uncomment this section if you need to test with fixed values
+          /*
+          _salesStats = {
+            'totalSales': 83000.0,
+            'totalOrders': 5,
+            'averageOrder': 16600.0,
+            'todaySales': 20000.0,
+            'todayOrders': 1,
+          };
+          */
         });
       }
     } catch (e) {
       print('Error loading merchant dashboard data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load sales data: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -303,86 +367,94 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     // Content
                     Padding(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Avatar or icon
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: Icon(
-                        Icons.store,
-                                size: 30,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          // Welcome text
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Welcome back,',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.white.withOpacity(0.9),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _merchantName,
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    // Rating stars
-                                    _buildRatingStars(_rating),
-                                    const SizedBox(width: 8),
-                                    // Rating text
-                                    Text(
-                                      '$_rating',
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '($_reviewCount)',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white.withOpacity(0.8),
-                                      ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // Avatar or icon
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
+                                child: Center(
+                                  child: Icon(
+                            Icons.store,
+                                    size: 30,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              // Welcome text
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Welcome back,',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white.withOpacity(0.9),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _merchantName,
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        // Rating stars
+                                        _buildRatingStars(_rating),
+                                        const SizedBox(width: 8),
+                                        // Rating text
+                                        Text(
+                                          '$_rating',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '($_reviewCount)',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white.withOpacity(0.8),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
+                          // Store status toggle
+                          const SizedBox(height: 20),
+                          _buildStoreStatusToggle(),
                         ],
                       ),
                     ),
@@ -390,6 +462,129 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                 ),
       ),
     );
+  }
+  
+  // Build the store status toggle switch
+  Widget _buildStoreStatusToggle() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Store Status',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          Row(
+            children: [
+              Text(
+                _isStoreActive ? 'Open' : 'Closed',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: _isStoreActive ? Colors.white : Colors.white.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _isUpdatingStatus
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Switch(
+                    value: _isStoreActive,
+                    onChanged: _toggleStoreStatus,
+                    activeColor: Colors.white,
+                    activeTrackColor: Colors.green.shade300,
+                    inactiveThumbColor: Colors.white,
+                    inactiveTrackColor: Colors.red.withOpacity(0.5),
+                  ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Method to toggle store status
+  Future<void> _toggleStoreStatus(bool newStatus) async {
+    // Exit early if already updating to prevent double-tap issues
+    if (_isUpdatingStatus) {
+      print('Already updating store status, ignoring tap');
+      return;
+    }
+    
+    setState(() {
+      _isUpdatingStatus = true;
+    });
+    
+    print('Toggling store status to: $newStatus');
+    
+    try {
+      final success = await _authService.updateMerchantStoreStatus(newStatus);
+      
+      if (success && mounted) {
+        print('Store status update successful');
+        setState(() {
+          _isStoreActive = newStatus;
+          _isUpdatingStatus = false;
+        });
+        
+        // Reload data to ensure we have the latest state
+        await _loadData();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Store is now ${newStatus ? 'open' : 'closed'}'),
+            backgroundColor: newStatus ? Colors.green : Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        // Handle failure
+        print('Store status update failed');
+        setState(() {
+          _isUpdatingStatus = false;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update store status'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error updating store status: $e');
+      setState(() {
+        _isUpdatingStatus = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
   
   Widget _buildSetupReminder() {
@@ -464,6 +659,47 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header with refresh button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Sales Overview",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: () {
+                    print('Manually refreshing sales data...');
+                    setState(() {
+                      _isLoading = true;
+                    });
+                    _loadData().then((_) {
+                      if (mounted) {
+                        print('Sales data refreshed - Total Sales: ${_salesStats['totalSales']}');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Sales data refreshed'),
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    });
+                  },
+                  tooltip: 'Refresh sales data',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  splashRadius: 20,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            
             // Today's performance row
             Row(
               children: [

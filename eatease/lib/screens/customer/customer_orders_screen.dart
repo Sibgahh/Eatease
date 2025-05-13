@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../../models/order_model.dart';
 import '../../services/order_service.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/chat_service.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../utils/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'chat/chat_detail_screen.dart';
 
 class CustomerOrdersScreen extends StatefulWidget {
   const CustomerOrdersScreen({super.key});
@@ -17,8 +19,8 @@ class CustomerOrdersScreen extends StatefulWidget {
 class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with SingleTickerProviderStateMixin {
   final AuthService _authService = AuthService();
   final OrderService _orderService = OrderService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
+  final ChatService _chatService = ChatService();
+  
   // Tab controller for different order statuses
   late TabController _tabController;
   
@@ -40,24 +42,50 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
     super.dispose();
   }
 
-  // Get all customer orders
+  // Get all customer orders and filter by status
   Stream<List<OrderModel>> _getCustomerOrdersByStatus(List<String> statusList) {
-    final user = _authService.currentUser;
-    if (user == null) {
-      return Stream.value([]);
+    // Use the getUserOrders method from OrderService that doesn't use complex queries
+    return _orderService.getUserOrders().map(
+      (allOrders) => allOrders.where(
+        (order) => statusList.contains(order.status.toLowerCase())
+      ).toList()
+    );
+  }
+  
+  // Open chat with merchant for an active order
+  Future<void> _openOrderChat(OrderModel order) async {
+    try {
+      final user = _authService.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You need to be logged in to chat'))
+        );
+        return;
+      }
+      
+      final conversationId = await _chatService.createOrGetOrderConversation(
+        user.uid,
+        order.merchantId,
+        order.id
+      );
+      
+      if (!mounted) return;
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatDetailScreen(
+            conversationId: conversationId,
+            otherUserId: order.merchantId,
+            otherUserName: order.merchantName,
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening chat: $e'))
+      );
     }
-
-    return _firestore
-        .collection('orders')
-        .where('customerId', isEqualTo: user.uid)
-        .where('status', whereIn: statusList)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return OrderModel.fromMap(doc.data(), doc.id);
-          }).toList();
-        });
   }
 
   @override
@@ -103,7 +131,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
           
           final userRole = snapshot.data ?? 'customer';
           return BottomNavBar(
-            currentIndex: 2, // Orders tab
+            currentIndex: 2, // Orders tab remains at index 2
             userRole: userRole,
           );
         },
@@ -151,21 +179,26 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
           );
         }
         
+        // Sort orders by creation date (newest first)
+        orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: orders.length,
           itemBuilder: (context, index) {
             final order = orders[index];
-            return _buildOrderCard(order);
+            // Pass the status list to determine if this is an active order
+            return _buildOrderCard(order, statusList);
           },
         );
       },
     );
   }
 
-  Widget _buildOrderCard(OrderModel order) {
+  Widget _buildOrderCard(OrderModel order, List<String> statusList) {
     final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     final formattedDate = dateFormat.format(order.createdAt);
+    final bool isActiveOrder = statusList.contains('pending') || statusList.contains('preparing') || statusList.contains('ready');
     
     return Card(
       elevation: 2,
@@ -250,6 +283,24 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
                   ),
                 ],
               ),
+              
+              // Chat button for active orders only
+              if (isActiveOrder) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openOrderChat(order),
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: const Text('Chat with Merchant'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryColor,
+                      side: BorderSide(color: AppTheme.primaryColor),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -321,6 +372,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
 
   void _showOrderDetails(OrderModel order) {
     final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
+    final bool isActiveOrder = ['pending', 'preparing', 'ready'].contains(order.status.toLowerCase());
     
     showModalBottomSheet(
       context: context,
@@ -375,6 +427,24 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
                     ],
                   ),
                   const SizedBox(height: 16),
+                  
+                  // Chat button for active orders
+                  if (isActiveOrder) ...[
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context); // Close the order details
+                        _openOrderChat(order);
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: const Text('Chat with Merchant'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.primaryColor,
+                        side: BorderSide(color: AppTheme.primaryColor),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   
                   // Order timeline
                   Row(
@@ -591,7 +661,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
     );
   }
 
-  Widget _buildOrderItemRow(OrderItemModel item) {
+  Widget _buildOrderItemRow(OrderItem item) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -699,17 +769,11 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
           const SnackBar(content: Text('Cancelling order...')),
         );
         
-        final result = await _orderService.updateOrderStatus(orderId, 'cancelled');
+        await _orderService.updateOrderStatusInDB(orderId, 'cancelled');
         
-        if (result['success']) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Order cancelled successfully')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to cancel order: ${result['message']}')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order cancelled successfully')),
+        );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),

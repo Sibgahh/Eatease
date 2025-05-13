@@ -72,7 +72,24 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   }
 
   Future<void> _register() async {
+    print('$_logPrefix Starting registration process');
+    
+    // Validate form
     if (!_formKey.currentState!.validate()) {
+      print('$_logPrefix Form validation failed');
+      setState(() {
+        _errorMessage = 'Please fill in all required fields correctly';
+      });
+      return;
+    }
+    print('$_logPrefix Form validation passed');
+
+    // Validate passwords match
+    if (_passwordController.text != _confirmPasswordController.text) {
+      print('$_logPrefix Passwords do not match');
+      setState(() {
+        _errorMessage = 'Passwords do not match';
+      });
       return;
     }
 
@@ -83,7 +100,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
     try {
       print('$_logPrefix Attempting registration with email: ${_emailController.text.trim()}');
-      await _authService.createUserWithRole(
+      print('$_logPrefix Selected role: $_selectedRole');
+      
+      final userId = await _authService.createUserWithRole(
         _emailController.text.trim(),
         _passwordController.text.trim(),
         _displayNameController.text.trim(),
@@ -91,14 +110,46 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         _selectedRole,
       );
       
-      print('$_logPrefix Registration successful, AuthWrapper will handle navigation');
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.initial);
+      print('$_logPrefix Registration successful with userId: $userId');
+      
+      if (!mounted) {
+        print('$_logPrefix Widget is not mounted, cannot navigate');
+        return;
+      }
+
+      print('$_logPrefix Widget is mounted, proceeding with navigation');
+      
+      // Wait for a short moment to ensure Firebase state is updated
+      await Future.delayed(const Duration(milliseconds: 1000));
+      
+      // Navigate to the appropriate screen based on role
+      if (_selectedRole == 'merchant') {
+        print('$_logPrefix Navigating to merchant screen');
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.merchant,
+          (route) => false,
+        );
+      } else {
+        print('$_logPrefix Navigating to customer screen');
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.customer,
+          (route) => false,
+        );
       }
     } catch (e) {
       print('$_logPrefix Registration error: $e');
+      String errorMessage = 'Registration failed. ';
+      if (e.toString().contains('email-already-in-use')) {
+        errorMessage += 'This email is already registered.';
+      } else if (e.toString().contains('weak-password')) {
+        errorMessage += 'Password is too weak.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage += 'Invalid email address.';
+      } else {
+        errorMessage += 'Please try again.';
+      }
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = errorMessage;
       });
     } finally {
       if (mounted) {
@@ -216,14 +267,14 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                               ),
                             ],
                           ),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
                                 // Name Field
-              TextFormField(
-                controller: _displayNameController,
+                                TextFormField(
+                                  controller: _displayNameController,
                                   textInputAction: TextInputAction.next,
                                   decoration: InputDecoration(
                                     labelText: 'Full Name',
@@ -244,23 +295,23 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                       borderSide: BorderSide(color: Color(0xFF4CAF50), width: 1.5),
                                     ),
                                     labelStyle: TextStyle(color: Colors.grey.shade700),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your name';
-                  }
-                  return null;
-                },
-              ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter your name';
+                                    }
+                                    return null;
+                                  },
+                                ),
                                 const SizedBox(height: 20.0),
                                 
                                 // Email Field
-              TextFormField(
-                controller: _emailController,
+                                TextFormField(
+                                  controller: _emailController,
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
                                   decoration: InputDecoration(
-                  labelText: 'Email',
+                                    labelText: 'Email',
                                     hintText: 'Enter your email',
                                     filled: true,
                                     fillColor: Colors.grey.shade100,
@@ -279,9 +330,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                     ),
                                     labelStyle: TextStyle(color: Colors.grey.shade700),
                                   ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter your email';
                                     } else if (!value.contains('@') || !value.contains('.')) {
                                       return 'Please enter a valid email';
                                     }
@@ -318,19 +369,19 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
                                       return 'Please enter your phone number';
-                  }
-                  return null;
-                },
-              ),
+                                    }
+                                    return null;
+                                  },
+                                ),
                                 const SizedBox(height: 20.0),
                                 
                                 // Password Field
-              TextFormField(
-                controller: _passwordController,
+                                TextFormField(
+                                  controller: _passwordController,
                                   obscureText: _obscurePassword,
                                   textInputAction: TextInputAction.next,
                                   decoration: InputDecoration(
-                  labelText: 'Password',
+                                    labelText: 'Password',
                                     hintText: 'Enter your password',
                                     filled: true,
                                     fillColor: Colors.grey.shade100,
@@ -360,15 +411,15 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                     ),
                                     labelStyle: TextStyle(color: Colors.grey.shade700),
                                   ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
                                       return 'Please enter your password';
                                     } else if (value.length < 6) {
-                    return 'Password must be at least 6 characters';
-                  }
-                  return null;
-                },
-              ),
+                                      return 'Password must be at least 6 characters';
+                                    }
+                                    return null;
+                                  },
+                                ),
                                 const SizedBox(height: 20.0),
                                 
                                 // Confirm Password Field
@@ -452,10 +503,10 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                   ),
                                 ),
                                 
-              const SizedBox(height: 24.0),
+                                const SizedBox(height: 24.0),
                                 
                                 // Error Message
-              if (_errorMessage.isNotEmpty)
+                                if (_errorMessage.isNotEmpty)
                                   Container(
                                     padding: const EdgeInsets.all(12.0),
                                     decoration: BoxDecoration(
@@ -468,19 +519,19 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                         Icon(Icons.error_outline, color: Colors.red),
                                         SizedBox(width: 10),
                                         Expanded(
-                  child: Text(
-                    _errorMessage,
+                                          child: Text(
+                                            _errorMessage,
                                             style: TextStyle(color: Colors.red.shade800),
                                           ),
                                         ),
                                       ],
-                  ),
-                ),
+                                    ),
+                                  ),
                                 if (_errorMessage.isNotEmpty) const SizedBox(height: 20.0),
                                 
                                 // Register Button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _register,
+                                ElevatedButton(
+                                  onPressed: _isLoading ? null : _register,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Color(0xFF4CAF50),
                                     foregroundColor: Colors.white,
@@ -491,7 +542,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                     elevation: 3,
                                     disabledBackgroundColor: Color(0xFF4CAF50).withOpacity(0.6),
                                   ),
-                child: _isLoading
+                                  child: _isLoading
                                       ? SizedBox(
                                           height: 24,
                                           width: 24,
@@ -507,7 +558,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                             fontWeight: FontWeight.bold,
                                             letterSpacing: 0.5,
                                           ),
-              ),
+                                        ),
                                 ),
                               ],
                             ),
@@ -524,11 +575,11 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                               'Already have an account? ',
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                             ),
-              TextButton(
-                onPressed: () {
+                            TextButton(
+                              onPressed: () {
                                 // Start reverse animation before navigating
                                 _animationController.reverse().then((_) {
-                  widget.onLogin();
+                                  widget.onLogin();
                                 });
                               },
                               style: TextButton.styleFrom(
@@ -546,8 +597,8 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                   fontSize: 15,
                                 ),
                               ),
-              ),
-            ],
+                            ),
+                          ],
                         ),
                       ],
                     ),

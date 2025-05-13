@@ -20,6 +20,11 @@ class AppTheme {
   static const Color textSecondaryColor = Color(0xFF757575); // Medium grey
   static const Color dividerColor = Color(0xFFBDBDBD);  // Light grey
   
+  // Neumorphism Colors
+  static const Color neumorphismLight = Color(0xFFFFFFFF);
+  static const Color neumorphismDark = Color(0xFFE0E0E0);
+  static const Color neumorphismBackground = Color(0xFFF0F0F0);
+  
   // Font Weights
   static const FontWeight light = FontWeight.w300;
   static const FontWeight regular = FontWeight.w400;
@@ -131,6 +136,72 @@ class AppTheme {
         offset: const Offset(0, 3),
       ),
     ];
+  }
+  
+  // Neumorphism Shadows
+  static List<BoxShadow> getNeumorphismShadow({bool isPressed = false}) {
+    if (isPressed) {
+      return [
+        BoxShadow(
+          color: neumorphismDark,
+          offset: const Offset(2, 2),
+          blurRadius: 2,
+          spreadRadius: 1,
+        ),
+        BoxShadow(
+          color: neumorphismLight,
+          offset: const Offset(-2, -2),
+          blurRadius: 2,
+          spreadRadius: 1,
+        ),
+      ];
+    }
+    return [
+      BoxShadow(
+        color: neumorphismDark,
+        offset: const Offset(4, 4),
+        blurRadius: 8,
+        spreadRadius: 1,
+      ),
+      BoxShadow(
+        color: neumorphismLight,
+        offset: const Offset(-4, -4),
+        blurRadius: 8,
+        spreadRadius: 1,
+      ),
+    ];
+  }
+
+  // Neumorphism Container Decoration
+  static BoxDecoration getNeumorphismDecoration({
+    bool isPressed = false,
+    double borderRadius = 12,
+    Color? color,
+  }) {
+    return BoxDecoration(
+      color: color ?? neumorphismBackground,
+      borderRadius: BorderRadius.circular(borderRadius),
+      boxShadow: getNeumorphismShadow(isPressed: isPressed),
+    );
+  }
+
+  // Neumorphism Button Style
+  static ButtonStyle getNeumorphismButtonStyle({
+    bool isPressed = false,
+    double borderRadius = 12,
+    Color? backgroundColor,
+  }) {
+    return ButtonStyle(
+      backgroundColor: MaterialStateProperty.all(backgroundColor ?? neumorphismBackground),
+      shape: MaterialStateProperty.all(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+      ),
+      elevation: MaterialStateProperty.all(0),
+      shadowColor: MaterialStateProperty.all(Colors.transparent),
+      overlayColor: MaterialStateProperty.all(neumorphismDark.withOpacity(0.1)),
+    );
   }
   
   // App theme data

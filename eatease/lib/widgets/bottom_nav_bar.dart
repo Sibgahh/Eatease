@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../routes.dart';
 import '../services/auth/auth_service.dart';
 import '../screens/customer/cart_screen.dart';
@@ -11,326 +12,276 @@ import '../screens/merchant/product_list_screen.dart';
 import '../screens/merchant/merchant_orders_screen.dart';
 import '../screens/merchant/merchant_settings_screen.dart';
 import '../screens/merchant/merchant_chat_screen.dart';
+import '../utils/app_theme.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
   final String userRole;
-  final Function(int)? onTabChanged;
 
   const BottomNavBar({
-    Key? key,
+    super.key,
     required this.currentIndex,
     required this.userRole,
-    this.onTabChanged,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Different navigation items based on user role
+    // Get role-specific colors
+    final primaryColor = AppTheme.getPrimaryColor(userRole);
+    
+    // Define tab items based on user role
+    final List<Map<String, dynamic>> navItems = _getNavItemsForRole(userRole);
+    
+    return Container(
+      height: 60,
+      margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(navItems.length, (index) {
+          bool isSelected = currentIndex == index;
+          
+          return _buildNavItem(
+            context: context,
+            icon: navItems[index]['icon'],
+            index: index,
+            isSelected: isSelected,
+            primaryColor: primaryColor,
+          );
+        }),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _getNavItemsForRole(String role) {
+    switch (role.toLowerCase()) {
+      case 'customer':
+        return [
+          {'icon': Icons.home_rounded},
+          {'icon': Icons.shopping_cart_rounded},
+          {'icon': Icons.receipt_long_rounded},
+          {'icon': Icons.chat_rounded},
+          {'icon': Icons.person_rounded},
+        ];
+      case 'merchant':
+        return [
+          {'icon': Icons.home_rounded},
+          {'icon': Icons.restaurant_menu_rounded},
+          {'icon': Icons.receipt_long_rounded},
+          {'icon': Icons.chat_rounded},
+          {'icon': Icons.settings_rounded},
+        ];
+      case 'admin':
+        return [
+          {'icon': Icons.dashboard_rounded},
+          {'icon': Icons.people_rounded},
+          {'icon': Icons.home_rounded},
+          {'icon': Icons.analytics_rounded},
+          {'icon': Icons.settings_rounded},
+        ];
+      default:
+        return [
+          {'icon': Icons.home_rounded},
+          {'icon': Icons.shopping_cart_rounded},
+          {'icon': Icons.receipt_long_rounded},
+          {'icon': Icons.chat_rounded},
+          {'icon': Icons.person_rounded},
+        ];
+    }
+  }
+
+  Widget _buildNavItem({
+    required BuildContext context,
+    required IconData icon,
+    required int index,
+    required bool isSelected,
+    required Color primaryColor,
+  }) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            if (!isSelected) {
+              HapticFeedback.lightImpact();
+              _navigateToPage(index, context);
+            }
+          },
+          customBorder: const StadiumBorder(),
+          splashColor: primaryColor.withOpacity(0.1),
+          highlightColor: Colors.transparent,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(30),
+              color: Colors.transparent,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  height: isSelected ? 3 : 0,
+                  width: 20,
+                  margin: isSelected ? const EdgeInsets.only(bottom: 4) : EdgeInsets.zero,
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                Icon(
+                  icon,
+                  color: isSelected ? primaryColor : Colors.grey.shade400,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToPage(int index, BuildContext context) {
+    if (currentIndex == index) return;
+
     if (userRole == 'customer') {
-      return _buildCustomerBottomNav(context);
+      _navigateCustomerPage(index, context);
     } else if (userRole == 'merchant') {
-      return _buildMerchantBottomNav(context);
+      _navigateMerchantPage(index, context);
     } else if (userRole == 'admin') {
-      return _buildAdminBottomNav(context);
-    }
-    
-    // Default to customer bottom nav if role is unknown
-    return _buildCustomerBottomNav(context);
-  }
-
-  // Helper method to navigate between main tabs
-  void _navigateToMainTab(BuildContext context, String routeName) {
-    // Get the current route name
-    final currentRoute = ModalRoute.of(context)?.settings.name;
-    
-    // If we're already on this route, do nothing
-    if (currentRoute == routeName) return;
-    
-    // Check if we're on one of the main tabs
-    final isOnMainTab = [
-      AppRoutes.customer,
-      AppRoutes.customerProfile,
-      // Add other main customer routes here if needed
-    ].contains(currentRoute);
-    
-    if (isOnMainTab) {
-      // If we're on a main tab, use pushReplacementNamed to avoid stacking
-      Navigator.pushReplacementNamed(context, routeName);
-    } else {
-      // If we're on a sub-screen, clear everything back to the main tab
-      Navigator.pushNamedAndRemoveUntil(
-        context, 
-        routeName,
-        (route) => false,
-      );
+      _navigateAdminPage(index, context);
     }
   }
 
-  Widget _buildCustomerBottomNav(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, -3),
+  void _navigateCustomerPage(int index, BuildContext context) {
+    switch (index) {
+      case 0: // Home
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CustomerHomeScreen(),
+            settings: const RouteSettings(name: '/customer'),
           ),
-        ],
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.green.shade600,
-          unselectedItemColor: Colors.grey.shade400,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
-          elevation: 0,
-          onTap: (index) {
-            if (index == currentIndex) return;
-            
-            switch (index) {
-              case 0:
-                // Direct navigation to home screen
-                print('[NAVIGATION] Directly navigating to Home using MaterialPageRoute');
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CustomerHomeScreen(),
-                    settings: const RouteSettings(name: AppRoutes.customer),
-                  ),
-                  (route) => false, // Clear all other routes
-                );
-                break;
-              case 1:
-                // Navigate to cart
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CartScreen()),
-                );
-                break;
-              case 2:
-                // Navigate to orders
-                print('[NAVIGATION] Directly navigating to Orders using MaterialPageRoute');
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CustomerOrdersScreen(),
-                    settings: const RouteSettings(name: AppRoutes.customerOrders),
-                  ),
-                  (route) => false, // Clear all other routes
-                );
-                break;
-              case 3:
-                // Navigate to chat
-                print('[NAVIGATION] Directly navigating to Chat using MaterialPageRoute');
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CustomerChatScreen(),
-                    settings: const RouteSettings(name: AppRoutes.customerChat),
-                  ),
-                  (route) => false, // Clear all other routes
-                );
-                break;
-              case 4:
-                // Direct navigation to profile screen
-                print('[NAVIGATION] Directly navigating to Profile using MaterialPageRoute');
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CustomerProfileScreen(),
-                    settings: const RouteSettings(name: AppRoutes.customerProfile),
-                  ),
-                  (route) => false, // Clear all other routes
-                );
-                break;
-            }
-          },
-          items: [
-            _buildBottomNavItem(Icons.home_outlined, Icons.home, 'Home', 0),
-            _buildBottomNavItem(Icons.shopping_cart_outlined, Icons.shopping_cart, 'Cart', 1),
-            _buildBottomNavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Orders', 2),
-            _buildBottomNavItem(Icons.chat_outlined, Icons.chat, 'Chat', 3),
-            _buildBottomNavItem(Icons.person_outline, Icons.person, 'Profile', 4),
-          ],
-        ),
-      ),
-    );
+          (route) => false,
+        );
+        break;
+      case 1: // Cart
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CartScreen(),
+            settings: const RouteSettings(name: '/cart'),
+          ),
+        );
+        break;
+      case 2: // Orders
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CustomerOrdersScreen(),
+            settings: const RouteSettings(name: '/orders'),
+          ),
+        );
+        break;
+      case 3: // Chat
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CustomerChatScreen(),
+            settings: const RouteSettings(name: '/customer/chat'),
+          ),
+        );
+        break;
+      case 4: // Profile
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CustomerProfileScreen(),
+            settings: const RouteSettings(name: '/profile'),
+          ),
+        );
+        break;
+    }
   }
 
-  Widget _buildMerchantBottomNav(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, -3),
-          ),
-        ],
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.blue.shade600,
-          unselectedItemColor: Colors.grey.shade400,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
-          elevation: 0,
-          onTap: (index) {
-            if (index == currentIndex) return;
-            
-            // If we have an onTabChanged callback, use it
-            if (onTabChanged != null) {
-              onTabChanged!(index);
-              return;
-            }
-            
-            // Fallback to old navigation for backward compatibility
-            switch (index) {
-              case 0:
-                print('[NAVIGATION] Navigating to Merchant Home');
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (context) => const MerchantHomeScreen(),
-                  ),
-                  (route) => false,
-                );
-                break;
-              case 1:
-                print('[NAVIGATION] Navigating to Merchant Products');
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (context) => const ProductListScreen(),
-                  ),
-                  (route) => false,
-                );
-                break;
-              case 2:
-                print('[NAVIGATION] Navigating to Merchant Orders');
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (context) => const MerchantOrdersScreen(),
-                  ),
-                  (route) => false,
-                );
-                break;
-              case 3:
-                print('[NAVIGATION] Navigating to Merchant Chat');
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (context) => const MerchantChatScreen(),
-                  ),
-                  (route) => false,
-                );
-                break;
-              case 4:
-                print('[NAVIGATION] Navigating to Merchant Settings');
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (context) => const MerchantSettingsScreen(),
-                  ),
-                  (route) => false,
-                );
-                break;
-            }
-          },
-          items: [
-            _buildBottomNavItem(Icons.home_outlined, Icons.home, 'Home', 0),
-            _buildBottomNavItem(Icons.inventory_2_outlined, Icons.inventory_2, 'Products', 1),
-            _buildBottomNavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Orders', 2),
-            _buildBottomNavItem(Icons.chat_outlined, Icons.chat, 'Chat', 3),
-            _buildBottomNavItem(Icons.settings_outlined, Icons.settings, 'Settings', 4),
-          ],
-        ),
-      ),
-    );
+  void _navigateMerchantPage(int index, BuildContext context) {
+    switch (index) {
+      case 0: // Home
+        Navigator.pushNamedAndRemoveUntil(
+          context, 
+          AppRoutes.merchant,
+          (route) => false,
+        );
+        break;
+      case 1: // Products
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.merchantProducts,
+          (route) => false,
+        );
+        break;
+      case 2: // Orders
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.merchantOrders,
+          (route) => false,
+        );
+        break;
+      case 3: // Chat
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.merchantChat,
+          (route) => false,
+        );
+        break;
+      case 4: // Settings
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.merchantSettings,
+          (route) => false,
+        );
+        break;
+    }
   }
 
-  Widget _buildAdminBottomNav(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, -3),
+  void _navigateAdminPage(int index, BuildContext context) {
+    switch (index) {
+      case 0: // Dashboard
+        // Handle dashboard navigation
+        break;
+      case 1: // Users
+        // Handle users navigation
+        break;
+      case 2: // Home
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MerchantHomeScreen(),
+            settings: const RouteSettings(name: '/admin'),
           ),
-        ],
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.red.shade600,
-          unselectedItemColor: Colors.grey.shade400,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
-          elevation: 0,
-          onTap: (index) {
-            if (index == currentIndex) return;
-            
-            switch (index) {
-              case 0:
-                Navigator.pushReplacementNamed(context, AppRoutes.admin);
-                break;
-              case 1:
-                Navigator.pushReplacementNamed(context, AppRoutes.adminUsers);
-                break;
-            }
-          },
-          items: [
-            _buildBottomNavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard', 0),
-            _buildBottomNavItem(Icons.people_outline, Icons.people, 'Users', 1),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  BottomNavigationBarItem _buildBottomNavItem(IconData iconOutlined, IconData iconFilled, String label, int index) {
-    return BottomNavigationBarItem(
-      icon: Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Icon(currentIndex == index ? iconFilled : iconOutlined, size: 24),
-      ),
-      label: label,
-    );
+          (route) => false,
+        );
+        break;
+      case 3: // Analytics
+        // Handle analytics navigation
+        break;
+      case 4: // Settings
+        // Handle settings navigation
+        break;
+    }
   }
 } 

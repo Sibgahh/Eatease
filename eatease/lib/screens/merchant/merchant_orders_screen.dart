@@ -758,7 +758,7 @@ class MerchantOrdersScreenState extends State<MerchantOrdersScreen>
                           borderRadius: BorderRadius.circular(8),
                           color: Colors.grey.shade200,
                         ),
-                        child: item.imageUrl != null
+                        child: item.imageUrl != null && item.imageUrl!.isNotEmpty
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: Image.network(

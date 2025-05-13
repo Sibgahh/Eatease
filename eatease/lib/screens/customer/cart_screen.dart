@@ -3,6 +3,7 @@ import '../../services/cart_service.dart';
 import '../../models/cart_item_model.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import 'checkout_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -101,7 +102,7 @@ class _CartScreenState extends State<CartScreen> {
           );
         },
       ),
-      bottomNavigationBar: const BottomNavBar(
+      bottomNavigationBar: BottomNavBar(
         currentIndex: 1,
         userRole: 'customer',
       ),
@@ -475,11 +476,25 @@ class _CartScreenState extends State<CartScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                // TODO: Implement checkout functionality
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Proceeding to checkout...'),
-                    backgroundColor: Colors.green,
+                if (items.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Your cart is empty'),
+                    ),
+                  );
+                  return;
+                }
+                
+                // Navigate to checkout screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CheckoutScreen(
+                      items: items,
+                      subtotal: subtotal,
+                      deliveryFee: deliveryFee,
+                      total: total,
+                    ),
                   ),
                 );
               },
