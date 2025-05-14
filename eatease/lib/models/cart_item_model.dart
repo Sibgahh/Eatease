@@ -6,6 +6,7 @@ class CartItemModel {
   final int quantity;
   final List<String>? selectedOptions;
   final String? specialInstructions;
+  final double? _customTotalPrice; // Store a custom total price if provided
 
   CartItemModel({
     required this.id,
@@ -13,7 +14,8 @@ class CartItemModel {
     required this.quantity,
     this.selectedOptions,
     this.specialInstructions,
-  });
+    double? totalPrice,
+  }) : _customTotalPrice = totalPrice;
 
   // Calculate the price for all selected customizations
   double get customizationsPrice {
@@ -59,7 +61,7 @@ class CartItemModel {
   }
 
   // Total price for this cart item including customizations
-  double get totalPrice => (product.price + customizationsPrice) * quantity;
+  double get totalPrice => _customTotalPrice ?? ((product.price + customizationsPrice) * quantity);
 
   // Create a copy with updated fields
   CartItemModel copyWith({
@@ -68,6 +70,7 @@ class CartItemModel {
     int? quantity,
     List<String>? selectedOptions,
     String? specialInstructions,
+    double? totalPrice,
   }) {
     return CartItemModel(
       id: id ?? this.id,
@@ -75,6 +78,7 @@ class CartItemModel {
       quantity: quantity ?? this.quantity,
       selectedOptions: selectedOptions ?? this.selectedOptions,
       specialInstructions: specialInstructions ?? this.specialInstructions,
+      totalPrice: totalPrice ?? this._customTotalPrice,
     );
   }
 

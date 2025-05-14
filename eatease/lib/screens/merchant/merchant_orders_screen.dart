@@ -5,6 +5,7 @@ import '../../services/order_service.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/chat_service.dart';
 
 // Separate widget for just the orders list
 class MerchantOrdersList extends StatefulWidget {
@@ -937,6 +938,13 @@ class MerchantOrdersScreenState extends State<MerchantOrdersScreen>
           .collection('orders')
           .doc(order.id)
           .update(updateData);
+      
+      // Ensure chat is deleted when order is completed or cancelled
+      if (newStatus == 'completed' || newStatus == 'cancelled') {
+        // Use the chat service to delete the order conversation
+        final chatService = ChatService();
+        await chatService.deleteOrderConversation(order.id);
+      }
       
       // Close the loading dialog
       if (context.mounted) {

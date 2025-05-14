@@ -110,6 +110,71 @@ class ChatService {
     }
   }
   
+  // Clean up all conversations for completed or cancelled orders
+  Future<void> cleanupCompletedOrderConversations() async {
+    try {
+      // First, get all orders that are completed or cancelled
+      final completedOrders = await _firestore
+          .collection('orders')
+          .where('status', whereIn: ['completed', 'cancelled'])
+          .get();
+      
+      if (completedOrders.docs.isEmpty) {
+        print('No completed or cancelled orders found to clean up conversations');
+        return;
+      }
+      
+      print('Found ${completedOrders.docs.length} completed/cancelled orders to check for conversations');
+      
+      // Get order IDs
+      final List<String> orderIds = completedOrders.docs.map((doc) => doc.id).toList();
+      
+      // Find conversations with these order IDs
+      // Due to Firestore limitations on "whereIn", process in batches of 10
+      for (int i = 0; i < orderIds.length; i += 10) {
+        final endIndex = (i + 10 < orderIds.length) ? i + 10 : orderIds.length;
+        final batchIds = orderIds.sublist(i, endIndex);
+        
+        final conversationsQuery = await _conversations
+            .where('orderId', whereIn: batchIds)
+            .get();
+        
+        print('Found ${conversationsQuery.docs.length} conversations for batch ${i ~/ 10 + 1} of completed orders');
+        
+        if (conversationsQuery.docs.isEmpty) continue;
+        
+        // Delete conversations and their messages
+        final batch = _firestore.batch();
+        for (final conversationDoc in conversationsQuery.docs) {
+          final conversationData = conversationDoc.data() as Map<String, dynamic>;
+          final chatId = ChatMessageModel.createChatId(
+              conversationData['customerId'], conversationData['merchantId']);
+          
+          // Get messages for this conversation
+          final messagesQuery = await _messages
+              .where('chatId', isEqualTo: chatId)
+              .get();
+          
+          // Add message deletions to batch
+          for (final messageDoc in messagesQuery.docs) {
+            batch.delete(messageDoc.reference);
+          }
+          
+          // Add conversation deletion to batch
+          batch.delete(conversationDoc.reference);
+          
+          print('Scheduled deletion for conversation ${conversationDoc.id} with orderId ${conversationData['orderId']}');
+        }
+        
+        // Execute batch
+        await batch.commit();
+        print('Successfully deleted conversations for batch ${i ~/ 10 + 1} of completed orders');
+      }
+    } catch (e) {
+      print('Error cleaning up completed order conversations: $e');
+    }
+  }
+  
   // Clean up expired conversations
   Future<void> cleanupExpiredConversations() async {
     try {
@@ -273,21 +338,39 @@ class ChatService {
   }
   
   // Create a new conversation or get existing
-  Future<String> createOrGetConversation(String customerId, String merchantId) async {
+  Future<String> createOrGetConversation(String customerId, String merchantId, {String? orderId}) async {
     try {
       if (customerId.isEmpty || merchantId.isEmpty) {
         throw Exception('Invalid user IDs provided');
       }
       
-      // Check if conversation already exists
-      final existingId = await getConversationId(customerId, merchantId);
-      if (existingId != null) {
-        // Update the expiration time for existing conversation to be 1 hour from now
-        final DateTime expirationTime = DateTime.now().add(const Duration(hours: 1));
-        await _conversations.doc(existingId).update({
-          'expirationTime': Timestamp.fromDate(expirationTime)
-        });
-        return existingId;
+      // If no order ID is provided, we need to check if there's an active order
+      if (orderId == null) {
+        // Check for active orders between this customer and merchant
+        final QuerySnapshot activeOrders = await FirebaseFirestore.instance
+            .collection('orders')
+            .where('customerId', isEqualTo: customerId)
+            .where('merchantId', isEqualTo: merchantId)
+            .where('status', whereIn: ['pending', 'preparing', 'ready'])
+            .limit(1)
+            .get();
+        
+        if (activeOrders.docs.isEmpty) {
+          throw Exception('No active orders found. Chat is only available during order processing.');
+        }
+        
+        // Use the first active order ID
+        orderId = activeOrders.docs.first.id;
+      }
+      
+      // Check if a conversation already exists for this order
+      final orderConversationQuery = await _conversations
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+      
+      if (orderConversationQuery.docs.isNotEmpty) {
+        return orderConversationQuery.docs.first.id;
       }
       
       // Get user details
@@ -300,9 +383,6 @@ class ChatService {
       if (merchantDetails['name'] == 'Unknown User') {
         print('Warning: Merchant details not fully loaded for ID: $merchantId');
       }
-      
-      // Set expiration time to 1 hour from now
-      final DateTime expirationTime = DateTime.now().add(const Duration(hours: 1));
       
       // Determine who initiated the conversation
       final String initiatorId = currentUserId ?? customerId;
@@ -321,9 +401,10 @@ class ChatService {
         'unreadCount': 0,
         'active': true,
         'createdAt': FieldValue.serverTimestamp(),
-        'expirationTime': Timestamp.fromDate(expirationTime),
         'lastMessageSenderId': initiatorId,
         'lastMessageSenderRole': isCustomerInitiator ? 'customer' : 'merchant',
+        'orderId': orderId,
+        'isOrderChat': true,
       };
       
       final docRef = await _conversations.add(conversationData);
@@ -625,6 +706,86 @@ class ChatService {
       }
     } catch (e) {
       print('Error updating existing conversations: $e');
+    }
+  }
+  
+  // Force delete all conversations for a user's completed orders
+  Future<void> forceDeleteAllCompletedOrderConversations(String userId) async {
+    if (userId.isEmpty) return;
+    
+    try {
+      print('Force deleting all completed order conversations for user $userId');
+      
+      // Get all orders for this user that are completed or cancelled
+      final completedOrders = await _firestore
+          .collection('orders')
+          .where('customerId', isEqualTo: userId)
+          .where('status', whereIn: ['completed', 'cancelled'])
+          .get();
+      
+      if (completedOrders.docs.isEmpty) {
+        print('No completed orders found for user $userId');
+        return;
+      }
+      
+      print('Found ${completedOrders.docs.length} completed/cancelled orders');
+      
+      // Get all conversations where this user is the customer
+      final userConversations = await _conversations
+          .where('customerId', isEqualTo: userId)
+          .get();
+      
+      if (userConversations.docs.isEmpty) {
+        print('No conversations found for user $userId');
+        return;
+      }
+      
+      print('Found ${userConversations.docs.length} conversations for user $userId');
+      
+      // Create a batch to delete conversations
+      final batch = _firestore.batch();
+      int deletedCount = 0;
+      
+      // Check each conversation to see if it's for a completed order
+      for (final conversationDoc in userConversations.docs) {
+        final conversationData = conversationDoc.data() as Map<String, dynamic>;
+        final orderId = conversationData['orderId'];
+        
+        if (orderId != null) {
+          // Check if this order is in the completed orders list
+          final isCompleted = completedOrders.docs.any((orderDoc) => orderDoc.id == orderId);
+          
+          if (isCompleted) {
+            // Delete all messages for this conversation
+            final chatId = ChatMessageModel.createChatId(
+                conversationData['customerId'], conversationData['merchantId']);
+            
+            final messagesQuery = await _messages
+                .where('chatId', isEqualTo: chatId)
+                .get();
+            
+            for (final messageDoc in messagesQuery.docs) {
+              batch.delete(messageDoc.reference);
+            }
+            
+            // Delete the conversation
+            batch.delete(conversationDoc.reference);
+            deletedCount++;
+            
+            print('Scheduled deletion for conversation ${conversationDoc.id} with orderId $orderId');
+          }
+        }
+      }
+      
+      if (deletedCount > 0) {
+        // Execute batch
+        await batch.commit();
+        print('Successfully deleted $deletedCount conversations for completed orders');
+      } else {
+        print('No conversations for completed orders found to delete');
+      }
+    } catch (e) {
+      print('Error force deleting completed order conversations: $e');
     }
   }
 } 

@@ -28,7 +28,13 @@ class CartService {
   double get totalPrice => _items.fold(0, (sum, item) => sum + item.totalPrice);
 
   // Add a product to the cart
-  void addToCart(ProductModel product, {int quantity = 1, List<String>? selectedOptions, String? specialInstructions}) {
+  void addToCart(
+    ProductModel product, {
+    int quantity = 1, 
+    List<String>? selectedOptions, 
+    String? specialInstructions,
+    double? totalPrice,
+  }) {
     // Check if the product with the same options is already in the cart
     final existingItemIndex = _items.indexWhere((item) => 
       item.product.id == product.id && 
@@ -51,6 +57,7 @@ class CartService {
           quantity: quantity,
           selectedOptions: selectedOptions,
           specialInstructions: specialInstructions,
+          totalPrice: totalPrice ?? (product.price * quantity), // Use provided total price or calculate
         ),
       );
     }

@@ -15,6 +15,8 @@ class ChatConversationModel {
   final DateTime expirationTime;
   final String lastMessageSenderId;
   final String lastMessageSenderRole;
+  final bool isOrderChat;
+  final String? orderId;
 
   ChatConversationModel({
     required this.id,
@@ -31,6 +33,8 @@ class ChatConversationModel {
     required this.expirationTime,
     this.lastMessageSenderId = '',
     this.lastMessageSenderRole = '',
+    this.isOrderChat = false,
+    this.orderId,
   });
 
   // Convert model to a map for Firestore
@@ -49,6 +53,8 @@ class ChatConversationModel {
       'expirationTime': expirationTime,
       'lastMessageSenderId': lastMessageSenderId,
       'lastMessageSenderRole': lastMessageSenderRole,
+      'isOrderChat': isOrderChat,
+      'orderId': orderId,
     };
   }
 
@@ -72,6 +78,8 @@ class ChatConversationModel {
         DateTime.now().add(const Duration(hours: 1)),
       lastMessageSenderId: data['lastMessageSenderId'] ?? '',
       lastMessageSenderRole: data['lastMessageSenderRole'] ?? '',
+      isOrderChat: data['isOrderChat'] ?? false,
+      orderId: data['orderId'],
     );
   }
 
@@ -91,6 +99,8 @@ class ChatConversationModel {
     DateTime? expirationTime,
     String? lastMessageSenderId,
     String? lastMessageSenderRole,
+    bool? isOrderChat,
+    String? orderId,
   }) {
     return ChatConversationModel(
       id: id ?? this.id,
@@ -107,6 +117,8 @@ class ChatConversationModel {
       expirationTime: expirationTime ?? this.expirationTime,
       lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
       lastMessageSenderRole: lastMessageSenderRole ?? this.lastMessageSenderRole,
+      isOrderChat: isOrderChat ?? this.isOrderChat,
+      orderId: orderId ?? this.orderId,
     );
   }
 } 

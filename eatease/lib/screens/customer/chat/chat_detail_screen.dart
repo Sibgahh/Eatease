@@ -38,11 +38,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _errorLoadingConversation = false;
   String _errorMessage = '';
   
-  // For expiration tracking
-  DateTime _expirationTime = DateTime.now().add(const Duration(hours: 1));
-  Timer? _expirationTimer;
-  String _timeRemaining = '1:00:00';
-
   @override
   void initState() {
     super.initState();
@@ -55,12 +50,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       return;
     }
     
-    // Get conversation expiration time
-    _loadExpirationTime();
-    
-    // Start timer to update the expiration countdown
-    _startExpirationTimer();
-    
     // Mark messages as read when opening the conversation
     _markMessagesAsRead();
     
@@ -72,7 +61,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    _expirationTimer?.cancel();
     super.dispose();
   }
   
@@ -84,62 +72,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     } catch (e) {
       print('Error setting up connection listener: $e');
     }
-  }
-  
-  // Load the expiration time from Firestore
-  Future<void> _loadExpirationTime() async {
-    try {
-      final conversationDoc = await FirebaseFirestore.instance
-          .collection('chat_conversations')
-          .doc(widget.conversationId)
-          .get();
-          
-      if (conversationDoc.exists) {
-        final data = conversationDoc.data() as Map<String, dynamic>;
-        if (data['expirationTime'] != null) {
-          setState(() {
-            _expirationTime = (data['expirationTime'] as Timestamp).toDate();
-          });
-          _updateTimeRemaining();
-        }
-      }
-    } catch (e) {
-      print('Error loading expiration time: $e');
-      
-      // Set a default expiration time 1 hour from now if there's an error
-      setState(() {
-        _expirationTime = DateTime.now().add(const Duration(hours: 1));
-        _updateTimeRemaining();
-      });
-    }
-  }
-  
-  // Start a timer to update the remaining time display
-  void _startExpirationTimer() {
-    _expirationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateTimeRemaining();
-    });
-  }
-  
-  // Update the time remaining string
-  void _updateTimeRemaining() {
-    final now = DateTime.now();
-    final remaining = _expirationTime.difference(now);
-    
-    if (remaining.isNegative) {
-      setState(() {
-        _timeRemaining = 'Expired';
-      });
-      return;
-    }
-    
-    final hours = remaining.inHours;
-    final minutes = (remaining.inMinutes % 60).toString().padLeft(2, '0');
-    final seconds = (remaining.inSeconds % 60).toString().padLeft(2, '0');
-    
-    setState(() {
-      _timeRemaining = '$hours:$minutes:$seconds';
-    });
   }
 
   Future<void> _markMessagesAsRead() async {
@@ -302,45 +234,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Expiration notice banner
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-                color: Colors.amber.shade100,
-                width: double.infinity,
-                child: Row(
-                  children: [
-                    Icon(Icons.access_time, size: 16, color: Colors.amber.shade800),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'This conversation will expire in $_timeRemaining',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.amber.shade900,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _extendExpiration,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: Text(
-                        'Extend',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
               // Messages list
               Expanded(
                 child: StreamBuilder<List<ChatMessageModel>>(
@@ -722,37 +615,5 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         ],
       ),
     );
-  }
-
-  // Add method to extend the conversation expiration
-  Future<void> _extendExpiration() async {
-    try {
-      setState(() {
-        _isLoading = true;
-      });
-      
-      await _chatService.extendConversationExpiration(widget.conversationId);
-      
-      // Reload the expiration time
-      await _loadExpirationTime();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Conversation extended by 1 hour'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to extend conversation: $e'),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 } 

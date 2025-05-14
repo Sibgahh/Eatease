@@ -60,8 +60,8 @@ class OrderService {
         'newStatus': newStatus,
       });
       
-      // If status is completed, delete any associated chat
-      if (newStatus == 'completed') {
+      // If status is completed or cancelled, delete any associated chat
+      if (newStatus == 'completed' || newStatus == 'cancelled') {
         await _chatService.deleteOrderConversation(orderId);
       }
       
@@ -161,8 +161,8 @@ class OrderService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
       
-      // If status is completed, delete any associated chat
-      if (status == 'completed') {
+      // If status is completed or cancelled, delete any associated chat
+      if (status == 'completed' || status == 'cancelled') {
         await _chatService.deleteOrderConversation(orderId);
       }
     } catch (e) {

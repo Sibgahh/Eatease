@@ -72,7 +72,6 @@ class BottomNavBar extends StatelessWidget {
           {'icon': Icons.home_rounded},
           {'icon': Icons.shopping_cart_rounded},
           {'icon': Icons.receipt_long_rounded},
-          {'icon': Icons.chat_rounded},
           {'icon': Icons.person_rounded},
         ];
       case 'merchant':
@@ -96,7 +95,6 @@ class BottomNavBar extends StatelessWidget {
           {'icon': Icons.home_rounded},
           {'icon': Icons.shopping_cart_rounded},
           {'icon': Icons.receipt_long_rounded},
-          {'icon': Icons.chat_rounded},
           {'icon': Icons.person_rounded},
         ];
     }
@@ -202,15 +200,7 @@ class BottomNavBar extends StatelessWidget {
           ),
         );
         break;
-      case 3: // Chat
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const CustomerChatScreen(),
-          ),
-        );
-        break;
-      case 4: // Profile
+      case 3: // Profile
         Navigator.push(
           context,
           MaterialPageRoute(

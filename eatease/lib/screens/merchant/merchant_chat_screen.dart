@@ -32,8 +32,18 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Clean up old conversations
+    _cleanupCompletedOrderChats();
     // Force refresh initially
     _refreshData();
+  }
+
+  Future<void> _cleanupCompletedOrderChats() async {
+    try {
+      await _chatService.cleanupCompletedOrderConversations();
+    } catch (e) {
+      print('Error cleaning up chats: $e');
+    }
   }
 
   Future<void> _refreshData() async {
@@ -190,6 +200,20 @@ class _MerchantChatScreenState extends State<MerchantChatScreen> {
               ),
               backgroundColor: AppTheme.primaryColor,
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.cleaning_services),
+                  tooltip: 'Clean up old chats',
+                  onPressed: () async {
+                    setState(() {
+                      _isLoading = true;
+                    });
+                    await _cleanupCompletedOrderChats();
+                    await _refreshData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cleaned up completed order chats')),
+                    );
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.refresh),
                   onPressed: _refreshData,

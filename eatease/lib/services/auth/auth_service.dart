@@ -3,10 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/user/user_model.dart';
 import '../../models/merchant_model.dart';
+import '../../services/device_service.dart';
 
 class AuthService {
   final auth.FirebaseAuth _auth = auth.FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final DeviceService _deviceService = DeviceService();
   
   // Memory cache for storing data temporarily
   final Map<String, dynamic> _memoryCache = {};
@@ -30,6 +32,46 @@ class AuthService {
           }
           return UserModel.fromMap(snapshot.data()!, snapshot.id);
         });
+  }
+
+  // Verify if the current device is authorized for this user
+  Future<bool> verifyCurrentDevice() async {
+    if (currentUser == null) {
+      return false;
+    }
+    
+    try {
+      // Get current device ID
+      final deviceInfo = await _deviceService.getDeviceInfo();
+      final currentDeviceId = deviceInfo['deviceId']!;
+      
+      // Get user data
+      final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
+      
+      if (!userDoc.exists) {
+        return false;
+      }
+      
+      // Get active device ID
+      final userData = userDoc.data()!;
+      final activeDeviceId = userData['activeDeviceId'];
+      
+      // If no active device is set, update with current device
+      if (activeDeviceId == null) {
+        await _firestore.collection('users').doc(currentUser!.uid).update({
+          'activeDeviceId': currentDeviceId,
+          'lastDeviceLogin': FieldValue.serverTimestamp(),
+          'lastDeviceName': deviceInfo['deviceName'],
+        });
+        return true;
+      }
+      
+      // Check if current device matches active device
+      return activeDeviceId == currentDeviceId;
+    } catch (e) {
+      print("Error verifying device: $e");
+      return false;
+    }
   }
 
   // Get user by ID
@@ -76,6 +118,11 @@ class AuthService {
         password: password,
       );
       
+      // Get the current device ID
+      Map<String, String> deviceInfo = await _deviceService.getDeviceInfo();
+      String currentDeviceId = deviceInfo['deviceId']!;
+      String deviceName = deviceInfo['deviceName']!;
+      
       // Check if user is banned/disabled in Firestore
       print("Checking if user is banned: ${result.user!.uid}");
       DocumentSnapshot userDoc = await _firestore.collection('users').doc(result.user!.uid).get();
@@ -90,11 +137,27 @@ class AuthService {
           await _auth.signOut();
           throw Exception('Your account has been disabled. Please contact admin for assistance.');
         }
+
+        // Check if user is already logged in on another device
+        String? activeDeviceId = userData['activeDeviceId'];
+        if (activeDeviceId != null && activeDeviceId != currentDeviceId) {
+          // User is already logged in on another device
+          print("User already logged in on device: $activeDeviceId");
+          
+          // Sign out the user immediately
+          await _auth.signOut();
+          
+          // Throw an exception to notify the user
+          throw Exception('active_device_conflict:$activeDeviceId');
+        }
       }
       
-      // If not banned, update last login time
+      // No conflicts, update device info and last login time
       await _firestore.collection('users').doc(result.user!.uid).update({
         'lastLogin': FieldValue.serverTimestamp(),
+        'activeDeviceId': currentDeviceId,
+        'lastDeviceLogin': FieldValue.serverTimestamp(),
+        'lastDeviceName': deviceName,
       });
       
       return result;
@@ -104,15 +167,64 @@ class AuthService {
     }
   }
 
+  // Force logout from previous device and login on current device
+  Future<auth.UserCredential> forceLoginOnNewDevice(String email, String password) async {
+    try {
+      // First authenticate with Firebase
+      auth.UserCredential result = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
+      // Get the current device ID
+      Map<String, String> deviceInfo = await _deviceService.getDeviceInfo();
+      String currentDeviceId = deviceInfo['deviceId']!;
+      String deviceName = deviceInfo['deviceName']!;
+
+      // Update device info and last login time, forcefully replacing the previous device
+      await _firestore.collection('users').doc(result.user!.uid).update({
+        'lastLogin': FieldValue.serverTimestamp(),
+        'activeDeviceId': currentDeviceId,
+        'lastDeviceLogin': FieldValue.serverTimestamp(),
+        'lastDeviceName': deviceName,
+      });
+      
+      return result;
+    } catch (e) {
+      print("Force login error: $e");
+      rethrow;
+    }
+  }
+
   // Sign out
   Future<void> signOut() async {
-    await _auth.signOut();
+    try {
+      // Clear the device ID from the user's record
+      if (currentUser != null) {
+        await _firestore.collection('users').doc(currentUser!.uid).update({
+          'activeDeviceId': null,
+          'lastDeviceLogin': FieldValue.serverTimestamp(),
+        });
+      }
+      
+      // Sign out from Firebase
+      await _auth.signOut();
+    } catch (e) {
+      print("Error during sign out: $e");
+      // Still try to sign out even if clearing the device ID fails
+      await _auth.signOut();
+    }
   }
 
   // Save user to Firestore
   Future<void> _saveUserToFirestore(auth.User user, String displayName) async {
     print("Saving user to Firestore: ${user.uid}, displayName: $displayName");
     DateTime now = DateTime.now();
+    
+    // Get device info for the current device
+    Map<String, String> deviceInfo = await _deviceService.getDeviceInfo();
+    String deviceId = deviceInfo['deviceId']!;
+    String deviceName = deviceInfo['deviceName']!;
     
     UserModel newUser = UserModel(
       id: user.uid,
@@ -125,6 +237,8 @@ class AuthService {
       createdAt: now,
       lastLogin: now,
       photoURL: user.photoURL,
+      activeDeviceId: deviceId,
+      lastDeviceLogin: now,
     );
     
     print("Created UserModel: role=${newUser.role}, roles=${newUser.roles}");
@@ -132,6 +246,13 @@ class AuthService {
         .collection('users')
         .doc(user.uid)
         .set(newUser.toMap());
+    
+    // Also store device name in a separate field
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .update({'lastDeviceName': deviceName});
+    
     print("User data saved to Firestore");
   }
 
@@ -147,6 +268,11 @@ class AuthService {
       // Update display name
       await userCredential.user!.updateDisplayName(displayName);
       
+      // Get device info for the current device
+      Map<String, String> deviceInfo = await _deviceService.getDeviceInfo();
+      String deviceId = deviceInfo['deviceId']!;
+      String deviceName = deviceInfo['deviceName']!;
+      
       // Save as admin user with admin role
       DateTime now = DateTime.now();
       
@@ -161,12 +287,20 @@ class AuthService {
         createdAt: now,
         lastLogin: now,
         photoURL: userCredential.user!.photoURL,
+        activeDeviceId: deviceId,
+        lastDeviceLogin: now,
       );
       
       await _firestore
           .collection('users')
           .doc(userCredential.user!.uid)
           .set(adminUser.toMap());
+      
+      // Also store device name in a separate field
+      await _firestore
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .update({'lastDeviceName': deviceName});
     } catch (e) {
       rethrow;
     }
@@ -207,6 +341,11 @@ class AuthService {
       // Update display name
       await userCredential.user!.updateDisplayName(displayName);
       
+      // Get device info for the current device
+      Map<String, String> deviceInfo = await _deviceService.getDeviceInfo();
+      String deviceId = deviceInfo['deviceId']!;
+      String deviceName = deviceInfo['deviceName']!;
+      
       print("[AUTH_SERVICE] Saving user data to Firestore");
       // Save user with role to Firestore
       DateTime now = DateTime.now();
@@ -222,12 +361,20 @@ class AuthService {
         createdAt: now,
         lastLogin: now,
         photoURL: userCredential.user!.photoURL,
+        activeDeviceId: deviceId,
+        lastDeviceLogin: now,
       );
       
       await _firestore
           .collection('users')
           .doc(userCredential.user!.uid)
           .set(newUser.toMap());
+      
+      // Also store device name in a separate field
+      await _firestore
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .update({'lastDeviceName': deviceName});
       
       print("[AUTH_SERVICE] User data saved to Firestore");
       

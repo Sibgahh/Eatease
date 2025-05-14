@@ -633,38 +633,13 @@ class ProductService {
       .collection('products')
       .where('isAvailable', isEqualTo: true)
       .snapshots()
-      .asyncMap((snapshot) async {
-        List<ProductModel> availableProducts = [];
-        
-        // Get all available products
+      .map((snapshot) {
+        // Get all available products without additional merchant checks
         final products = snapshot.docs.map((doc) {
           return ProductModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
         }).toList();
         
-        // Filter products by checking if merchant has properly configured their store
-        for (var product in products) {
-          try {
-            // Get merchant data
-            final merchantDoc = await _firestore
-                .collection('users')
-                .doc(product.merchantId)
-                .get();
-                
-            if (merchantDoc.exists) {
-              final merchantData = merchantDoc.data()!;
-              final merchant = MerchantModel.fromMap(merchantData, merchantDoc.id);
-              
-              // Only add products from merchants with configured stores
-              if (merchant.isStoreConfigured()) {
-                availableProducts.add(product);
-              }
-            }
-          } catch (e) {
-            print('Error checking merchant for product ${product.id}: $e');
-          }
-        }
-        
-        return availableProducts;
+        return products;
       });
   }
 

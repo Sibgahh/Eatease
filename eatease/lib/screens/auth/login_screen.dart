@@ -23,6 +23,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _isLoading = false;
   bool _obscurePassword = true;
   String _errorMessage = '';
+  bool _isDeviceConflict = false;
+  String _conflictDeviceId = '';
   
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -71,6 +73,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() {
       _isLoading = true;
       _errorMessage = '';
+      _isDeviceConflict = false;
+      _conflictDeviceId = '';
     });
 
     try {
@@ -86,6 +90,56 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
     } catch (e) {
       print('$_logPrefix Login error: $e');
+      
+      // Check if the error is a device conflict
+      if (e.toString().contains('active_device_conflict:')) {
+        // Extract the device ID from the error message
+        String errorMsg = e.toString();
+        String deviceId = errorMsg.split('active_device_conflict:')[1];
+        
+        setState(() {
+          _isDeviceConflict = true;
+          _conflictDeviceId = deviceId;
+          _errorMessage = 'This account is already logged in on another device. You must log out from the other device first or select "Sign In Anyway" to force log out other devices.';
+        });
+      } else {
+        setState(() {
+          _errorMessage = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  
+  Future<void> _forceLogin() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+      _isDeviceConflict = false;
+    });
+
+    try {
+      print('$_logPrefix Force login with email: ${_emailController.text.trim()}');
+      await _authService.forceLoginOnNewDevice(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+      
+      print('$_logPrefix Force login successful, AuthWrapper will handle navigation');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.initial);
+      }
+    } catch (e) {
+      print('$_logPrefix Force login error: $e');
       setState(() {
         _errorMessage = e.toString();
       });
@@ -205,11 +259,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               ),
                             ],
                           ),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
                                 // Welcome Text
                                 Text(
                                   'Welcome Back',
@@ -232,12 +286,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 const SizedBox(height: 24.0),
                                 
                                 // Email Field
-              TextFormField(
-                controller: _emailController,
+                                TextFormField(
+                                  controller: _emailController,
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
                                   decoration: InputDecoration(
-                  labelText: 'Email',
+                                    labelText: 'Email',
                                     hintText: 'Enter your email',
                                     filled: true,
                                     fillColor: Colors.grey.shade100,
@@ -256,25 +310,25 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     ),
                                     labelStyle: TextStyle(color: Colors.grey.shade700),
                                   ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter your email';
                                     } else if (!value.contains('@') || !value.contains('.')) {
                                       return 'Please enter a valid email';
-                  }
-                  return null;
-                },
-              ),
+                                    }
+                                    return null;
+                                  },
+                                ),
                                 const SizedBox(height: 20.0),
                                 
                                 // Password Field
-              TextFormField(
-                controller: _passwordController,
+                                TextFormField(
+                                  controller: _passwordController,
                                   obscureText: _obscurePassword,
                                   textInputAction: TextInputAction.done,
                                   onFieldSubmitted: (_) => _login(),
                                   decoration: InputDecoration(
-                  labelText: 'Password',
+                                    labelText: 'Password',
                                     hintText: 'Enter your password',
                                     filled: true,
                                     fillColor: Colors.grey.shade100,
@@ -304,15 +358,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     ),
                                     labelStyle: TextStyle(color: Colors.grey.shade700),
                                   ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your password';
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter your password';
                                     } else if (value.length < 6) {
                                       return 'Password must be at least 6 characters';
-                  }
-                  return null;
-                },
-              ),
+                                    }
+                                    return null;
+                                  },
+                                ),
                                 
                                 Align(
                                   alignment: Alignment.centerRight,
@@ -339,7 +393,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 const SizedBox(height: 20.0),
                                 
                                 // Error Message
-              if (_errorMessage.isNotEmpty)
+                                if (_errorMessage.isNotEmpty)
                                   Container(
                                     padding: const EdgeInsets.all(12.0),
                                     decoration: BoxDecoration(
@@ -352,19 +406,60 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         Icon(Icons.error_outline, color: Colors.red),
                                         SizedBox(width: 10),
                                         Expanded(
-                  child: Text(
-                    _errorMessage,
+                                          child: Text(
+                                            _errorMessage,
                                             style: TextStyle(color: Colors.red.shade800),
                                           ),
                                         ),
                                       ],
-                  ),
-                ),
+                                    ),
+                                  ),
                                 if (_errorMessage.isNotEmpty) const SizedBox(height: 20.0),
                                 
+                                // Force Login Button (Only show when there's a device conflict)
+                                if (_isDeviceConflict)
+                                  ElevatedButton(
+                                    onPressed: _isLoading ? null : _forceLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12.0),
+                                      ),
+                                      elevation: 3,
+                                      disabledBackgroundColor: Colors.orange.withOpacity(0.6),
+                                    ),
+                                    child: _isLoading
+                                        ? SizedBox(
+                                            height: 24,
+                                            width: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          )
+                                        : Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.warning_amber_rounded),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Sign In Anyway',
+                                                style: TextStyle(
+                                                  fontSize: 17.0,
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                                if (_isDeviceConflict) const SizedBox(height: 12.0),
+                                
                                 // Login Button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _login,
+                                ElevatedButton(
+                                  onPressed: _isLoading ? null : _login,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Color(0xFF4CAF50),
                                     foregroundColor: Colors.white,
@@ -375,7 +470,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     elevation: 3,
                                     disabledBackgroundColor: Color(0xFF4CAF50).withOpacity(0.6),
                                   ),
-                child: _isLoading
+                                  child: _isLoading
                                       ? SizedBox(
                                           height: 24,
                                           width: 24,
@@ -391,7 +486,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                             fontWeight: FontWeight.bold,
                                             letterSpacing: 0.5,
                                           ),
-              ),
+                                        ),
                                 ),
                               ],
                             ),
@@ -408,11 +503,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               "Don't have an account? ",
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                             ),
-              TextButton(
-                onPressed: () {
+                            TextButton(
+                              onPressed: () {
                                 // Start reverse animation before navigating
                                 _animationController.reverse().then((_) {
-                  widget.onRegister();
+                                  widget.onRegister();
                                 });
                               },
                               style: TextButton.styleFrom(
@@ -430,8 +525,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   fontSize: 15,
                                 ),
                               ),
-              ),
-            ],
+                            ),
+                          ],
                         ),
                       ],
                     ),

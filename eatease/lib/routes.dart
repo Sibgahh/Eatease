@@ -15,7 +15,6 @@ import 'screens/customer/customer_main_screen.dart';
 import 'screens/customer/profile_screen.dart';
 import 'screens/customer/profile_navigation.dart';
 import 'screens/customer/customer_orders_screen.dart';
-import 'screens/customer/chat/customer_chat_screen.dart';
 
 // Merchant Screens
 import 'screens/merchant/merchant_home_screen.dart';
@@ -45,7 +44,6 @@ class AppRoutes {
   // Customer Routes
   static const String customerProfile = '/customer/profile';
   static const String customerOrders = '/customer/orders';
-  static const String customerChat = '/customer/chat';
   
   // Merchant Routes
   static const String merchantProducts = '/merchant/products';
@@ -103,15 +101,11 @@ final Map<String, WidgetBuilder> appRoutes = {
   // Customer Routes
   AppRoutes.customerProfile: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Profile (${AppRoutes.customerProfile})');
-    return const CustomerMainScreen(initialTab: 4);
+    return const CustomerMainScreen(initialTab: 3);
   },
   AppRoutes.customerOrders: (context) {
     print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Orders (${AppRoutes.customerOrders})');
     return const CustomerMainScreen(initialTab: 2);
-  },
-  AppRoutes.customerChat: (context) {
-    print('${AppRoutes._logPrefix} NAVIGATED TO: Customer Chat (${AppRoutes.customerChat})');
-    return const CustomerMainScreen(initialTab: 3);
   },
   
   // Merchant Routes

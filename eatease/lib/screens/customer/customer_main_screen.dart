@@ -4,7 +4,6 @@ import '../../widgets/bottom_nav_bar.dart';
 import 'customer_home_screen.dart';
 import 'cart_screen.dart';
 import 'customer_orders_screen.dart';
-import 'chat/customer_chat_screen.dart';
 import 'profile_screen.dart';
 import '../../routes.dart';
 import '../../utils/app_theme.dart';
@@ -64,15 +63,7 @@ class _CustomerMainScreenState extends State<CustomerMainScreen> {
           ),
           backgroundColor: AppTheme.primaryColor,
         );
-      case 3: // Chat tab
-        return AppBar(
-          title: const Text(
-            'Messages',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          backgroundColor: AppTheme.primaryColor,
-        );
-      case 4: // Profile tab
+      case 3: // Profile tab
         return AppBar(
           title: const Text(
             'My Profile',
@@ -97,7 +88,6 @@ class _CustomerMainScreenState extends State<CustomerMainScreen> {
         CustomerHomeScreen(),
         CartScreen(showScaffold: false),
         CustomerOrdersScreen(showScaffold: false),
-        CustomerChatScreen(showScaffold: false),
         CustomerProfileScreen(showScaffold: false),
       ],
     );

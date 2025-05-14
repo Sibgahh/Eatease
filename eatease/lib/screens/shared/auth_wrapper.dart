@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/connectivity_service.dart';
+import '../../services/device_service.dart';
 import '../auth/login_screen.dart';
 import '../auth/register_screen.dart';
 import '../../routes.dart';
@@ -22,6 +23,7 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   bool isLogin = true;
   final ConnectivityService _connectivityService = ConnectivityService();
+  final AuthService _authService = AuthService();
 
   void toggleView() {
     setState(() {
@@ -54,12 +56,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 : RegisterScreen(onLogin: toggleView);
           }
 
-          // User is logged in, determine their role and navigate accordingly
-          print("[AUTH_WRAPPER] User logged in: ${userSnapshot.data!.uid}");
-          return FutureBuilder<String>(
-            future: _determineHomeRoute(AuthService()),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          // User is logged in, first verify if this is the correct device
+          return FutureBuilder<bool>(
+            future: _authService.verifyCurrentDevice(),
+            builder: (context, deviceVerified) {
+              // Show loading indicator while checking device
+              if (deviceVerified.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(
                     child: CircularProgressIndicator(),
@@ -67,32 +69,53 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 );
               }
 
-              if (snapshot.hasError) {
-                print("[AUTH_WRAPPER] Error determining route: ${snapshot.error}");
-                return Scaffold(
-                  body: Center(
-                    child: Text('Error: ${snapshot.error}'),
-                  ),
-                );
+              // If device verification failed, show login screen
+              if (deviceVerified.hasError || deviceVerified.data == false) {
+                print("[AUTH_WRAPPER] Device verification failed, showing login screen");
+                return LoginScreen(onRegister: toggleView);
               }
 
-              final route = snapshot.data ?? AppRoutes.customer;
-              print("[AUTH_WRAPPER] Navigating to route: $route");
-              
-              return Navigator(
-                onGenerateRoute: (settings) {
-                  Widget page;
-                  switch (route) {
-                    case AppRoutes.admin:
-                      page = const AdminDashboard();
-                      break;
-                    case AppRoutes.merchant:
-                      page = const MerchantMainScreen();
-                      break;
-                    default:
-                      page = const CustomerHomeScreen();
+              // Device verified, determine role and navigate accordingly
+              print("[AUTH_WRAPPER] User logged in: ${userSnapshot.data!.uid}");
+              return FutureBuilder<String>(
+                future: _determineHomeRoute(_authService),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(
+                      body: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
                   }
-                  return MaterialPageRoute(builder: (context) => page);
+
+                  if (snapshot.hasError) {
+                    print("[AUTH_WRAPPER] Error determining route: ${snapshot.error}");
+                    return Scaffold(
+                      body: Center(
+                        child: Text('Error: ${snapshot.error}'),
+                      ),
+                    );
+                  }
+
+                  final route = snapshot.data ?? AppRoutes.customer;
+                  print("[AUTH_WRAPPER] Navigating to route: $route");
+                  
+                  return Navigator(
+                    onGenerateRoute: (settings) {
+                      Widget page;
+                      switch (route) {
+                        case AppRoutes.admin:
+                          page = const AdminDashboard();
+                          break;
+                        case AppRoutes.merchant:
+                          page = const MerchantMainScreen();
+                          break;
+                        default:
+                          page = const CustomerHomeScreen();
+                      }
+                      return MaterialPageRoute(builder: (context) => page);
+                    },
+                  );
                 },
               );
             },

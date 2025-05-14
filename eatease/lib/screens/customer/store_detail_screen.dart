@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/product_model.dart';
 import '../../models/cart_item_model.dart';
 import '../../services/auth/auth_service.dart';
@@ -11,7 +13,6 @@ import 'customer_home_screen.dart';
 import 'chat/chat_detail_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class StoreDetailScreen extends StatefulWidget {
   final String merchantId;
@@ -64,42 +65,42 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     {
       'name': 'All',
       'emoji': '🍽️',
-      'color': Color(0xFF5C6BC0),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Appetizer',
       'emoji': '🍲',
-      'color': Color(0xFF26A69A),
+      'color': AppTheme.customerSecondaryColor,
     },
     {
       'name': 'Main Course',
       'emoji': '🥘',
-      'color': Color(0xFFFFA726),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Dessert',
       'emoji': '🍰',
-      'color': Color(0xFFEF5350),
+      'color': AppTheme.customerSecondaryColor,
     },
     {
       'name': 'Beverage',
       'emoji': '🥤',
-      'color': Color(0xFFEC407A),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Sides',
       'emoji': '🍟',
-      'color': Color(0xFF66BB6A),
+      'color': AppTheme.customerSecondaryColor,
     },
     {
       'name': 'Breakfast',
       'emoji': '🍳',
-      'color': Color(0xFFFFD54F),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Fast Food',
       'emoji': '🍔',
-      'color': Color(0xFFFF7043),
+      'color': AppTheme.customerSecondaryColor,
     },
   ];
 
@@ -528,12 +529,31 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 });
               }
         
+              final double width = MediaQuery.of(context).size.width;
+              int crossAxisCount;
+              double childAspectRatio;
+              
+              // Determine grid layout based on screen width
+              if (width > 900) {
+                // Large tablet
+                crossAxisCount = 4;
+                childAspectRatio = 0.85;
+              } else if (width > 600) {
+                // Medium tablet
+                crossAxisCount = 3;
+                childAspectRatio = 0.8;
+              } else {
+                // Phone
+                crossAxisCount = 2;
+                childAspectRatio = 0.7;
+              }
+              
               return SliverPadding(
-                  padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.78,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: childAspectRatio,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                   ),
@@ -599,9 +619,13 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
   // Widget to display individual product cards
   Widget _buildProductCard(BuildContext context, ProductModel product) {
+    // Check if we're on a tablet
+    final double width = MediaQuery.of(context).size.width;
+    final bool isTablet = width > 600;
+
     return Card(
       elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 4),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -617,57 +641,95 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
             // Product image
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: product.imageUrls.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: product.imageUrls.first,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey.shade200,
-                          child: const Center(
-                            child: CircularProgressIndicator(),
+              child: Stack(
+                children: [
+                  AspectRatio(
+                    aspectRatio: isTablet ? 1.4 / 1 : 1.2 / 1, // Slightly wider for tablet
+                    child: product.imageUrls.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: product.imageUrls.first,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image, size: 50, color: Colors.grey),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.image, size: 50, color: Colors.grey),
                           ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey.shade200,
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            size: 40,
-                            color: Colors.grey,
+                  ),
+                  // Add favorite button
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: ValueListenableBuilder<Set<String>>(
+                      valueListenable: CustomerHomeScreen.favoritesNotifier,
+                      builder: (context, favorites, _) {
+                        final isFavorite = favorites.contains(product.id);
+                        return GestureDetector(
+                          onTap: () {
+                            // Provide haptic feedback
+                            HapticFeedback.lightImpact();
+                            _toggleFavorite(product.id);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              isFavorite
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 18,
+                              color: isFavorite ? Colors.red : Colors.grey,
+                            ),
                           ),
-                        ),
-                      )
-                    : Container(
-                        color: Colors.grey.shade200,
-                        child: const Icon(
-                          Icons.image_not_supported,
-                          size: 40,
-                          color: Colors.grey,
-                        ),
-                      ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
             // Product details
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                padding: EdgeInsets.all(isTablet ? 8 : 6), // Slightly more padding on tablet
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       product.name,
-                      style: const TextStyle(
-                        fontSize: 14,
+                      style: TextStyle(
+                        fontSize: isTablet ? 15 : 14, // Slightly larger text on tablet
                         fontWeight: FontWeight.bold,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     // Category chip
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isTablet ? 8 : 6, 
+                        vertical: isTablet ? 3 : 2
+                      ),
                       decoration: BoxDecoration(
                         color: _getCategoryColor(product.category).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -679,13 +741,13 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       child: Text(
                         product.category,
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: isTablet ? 11 : 9,
                           fontWeight: FontWeight.w500,
                           color: _getCategoryColor(product.category),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     // Rating stars (moved below category)
                     Row(
                       children: [
@@ -714,24 +776,30 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       ],
                     ),
                     const Spacer(),
-                    // Price at the bottom
-                    Text(
-                      _currencyFormat.format(product.price),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                    if (!widget.isOpen)
-                      Text(
-                        'Closed',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.red.shade400,
+                    // Price and add to cart button
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Price
+                        Text(
+                          _currencyFormat.format(product.price),
+                          style: TextStyle(
+                            fontSize: isTablet ? 14 : 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryColor,
+                          ),
                         ),
-                      ),
+                        if (!widget.isOpen)
+                          Text(
+                            'Closed',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.red.shade400,
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -744,29 +812,91 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
 
   // Toggle favorite status
   void _toggleFavorite(String productId) {
-    final currentFavorites = Set<String>.from(CustomerHomeScreen.favoritesNotifier.value);
-    if (currentFavorites.contains(productId)) {
-      currentFavorites.remove(productId);
-    } else {
-      currentFavorites.add(productId);
+    try {
+      // Log the action
+      print('STORE-TOGGLE: Starting favorite toggle for $productId');
+      
+      // Get the current user
+      final user = _authService.currentUser;
+      if (user == null) {
+        print('STORE-TOGGLE: Cannot toggle - no user logged in');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You need to be logged in to save favorites')),
+        );
+        return;
+      }
+      
+      // Provide haptic feedback for immediate response
+      HapticFeedback.mediumImpact();
+      
+      // Get current favorites (local copy)
+      final currentFavorites = Set<String>.from(CustomerHomeScreen.favoritesNotifier.value);
+      final isCurrentlyFavorite = currentFavorites.contains(productId);
+      
+      print('STORE-TOGGLE: Current status - is favorite: $isCurrentlyFavorite');
+      print('STORE-TOGGLE: Favorites before: ${currentFavorites.toList()}');
+      
+      // Update local UI immediately
+      if (isCurrentlyFavorite) {
+        currentFavorites.remove(productId);
+      } else {
+        currentFavorites.add(productId);
+      }
+      
+      // Update the UI via the notifier
+      CustomerHomeScreen.favoritesNotifier.value = currentFavorites;
+      
+      print('STORE-TOGGLE: UI updated with new favorites: ${CustomerHomeScreen.favoritesNotifier.value.toList()}');
+      
+      // Perform Firestore operation directly here
+      final userFavoritesRef = FirebaseFirestore.instance
+          .collection('userFavorites')
+          .doc(user.uid);
+      
+      // Update Firestore in the background
+      userFavoritesRef.set({
+        'favorites': currentFavorites.toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true)).then((_) {
+        print('STORE-TOGGLE: Successfully saved favorites to Firestore');
+      }).catchError((error) {
+        print('STORE-TOGGLE: Error saving favorites: $error');
+        // Revert the UI change on error
+        if (isCurrentlyFavorite) {
+          // It was favorite, add it back
+          final revertedFavorites = Set<String>.from(CustomerHomeScreen.favoritesNotifier.value);
+          revertedFavorites.add(productId);
+          CustomerHomeScreen.favoritesNotifier.value = revertedFavorites;
+        } else {
+          // It wasn't favorite, remove it again
+          final revertedFavorites = Set<String>.from(CustomerHomeScreen.favoritesNotifier.value);
+          revertedFavorites.remove(productId);
+          CustomerHomeScreen.favoritesNotifier.value = revertedFavorites;
+        }
+        
+        // Show error to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update favorites: $error')),
+          );
+        }
+      });
+    } catch (e) {
+      print('STORE-TOGGLE: Unexpected error: $e');
     }
-    CustomerHomeScreen.favoritesNotifier.value = currentFavorites;
-    
-    // Save favorites
-    _saveFavorites();
   }
   
   // Get color for a category based on the defined categories
   Color _getCategoryColor(String category) {
     final Map<String, Color> categoryColors = {
-      'All': Color(0xFF5C6BC0),
-      'Appetizer': Color(0xFF26A69A),
-      'Main Course': Color(0xFFFFA726),
-      'Dessert': Color(0xFFEF5350),
-      'Beverage': Color(0xFFEC407A),
-      'Sides': Color(0xFF66BB6A),
-      'Breakfast': Color(0xFFFFD54F),
-      'Fast Food': Color(0xFFFF7043),
+      'All': AppTheme.customerPrimaryColor,
+      'Appetizer': AppTheme.customerSecondaryColor,
+      'Main Course': AppTheme.customerPrimaryColor,
+      'Dessert': AppTheme.customerSecondaryColor,
+      'Beverage': AppTheme.customerPrimaryColor,
+      'Sides': AppTheme.customerSecondaryColor,
+      'Breakfast': AppTheme.customerPrimaryColor,
+      'Fast Food': AppTheme.customerSecondaryColor,
     };
     
     // Find the category in the _categories list
@@ -777,35 +907,21 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     }
     
     // Return default color from map or a fallback color
-    return categoryColors[category] ?? AppTheme.primaryColor;
-  }
-  
-  // Save favorites to Firestore
-  Future<void> _saveFavorites() async {
-    try {
-      final user = _authService.currentUser;
-      if (user == null) return;
-      
-      final favorites = CustomerHomeScreen.favoritesNotifier.value.toList();
-      
-      await FirebaseFirestore.instance
-          .collection('userFavorites')
-          .doc(user.uid)
-          .set({
-            'favorites': favorites,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-    } catch (e) {
-      print('Error saving favorites: $e');
-    }
+    return categoryColors[category] ?? AppTheme.customerPrimaryColor;
   }
   
   // Show product details
   void _showProductDetails(BuildContext context, ProductModel product) {
+    // Reset quantity and special instructions
+    quantity = 1;
+    specialInstructions = null;
+    
+    // Check if we're on a tablet
+    final double width = MediaQuery.of(context).size.width;
+    final bool isTablet = width > 600;
+    
     // Variables for the details view
-    int _quantity = 1;
-    String _specialInstructions = '';
-    double _totalPrice = product.price;
+    double totalPrice = product.price;
     Map<String, String> _selectedOptions = {};
     
     // Initialize selected options with defaults
@@ -817,42 +933,46 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       });
     }
     
-    // Function to update the total price based on quantity and options
-    void _updateTotalPrice() {
-      double basePrice = product.price;
-      
-      // Add customization prices
-      double customizationsPrice = 0;
-      if (product.customizations != null) {
-        _selectedOptions.forEach((category, option) {
-          if (product.customizations!.containsKey(category)) {
-            final categoryData = product.customizations![category];
-            if (categoryData is Map && 
-                categoryData['options'] is List && 
-                categoryData['prices'] is List) {
-              
-              final options = categoryData['options'] as List;
-              final prices = categoryData['prices'] as List;
-              
-              final index = options.indexOf(option);
-              if (index >= 0 && index < prices.length && prices[index] is num) {
-                customizationsPrice += (prices[index] as num).toDouble();
-              }
-            }
-          }
-        });
-      }
-      
-      _totalPrice = (basePrice + customizationsPrice) * _quantity;
-    }
-    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setModalState) {
+            
+            // Move the _updateTotalPrice function inside the builder so it can use setModalState
+            void _updateTotalPrice() {
+              double basePrice = product.price;
+              
+              // Add customization prices
+              double customizationsPrice = 0;
+              if (product.customizations != null) {
+                _selectedOptions.forEach((category, option) {
+                  if (product.customizations!.containsKey(category)) {
+                    final categoryData = product.customizations![category];
+                    if (categoryData is Map && 
+                        categoryData['options'] is List && 
+                        categoryData['prices'] is List) {
+                      
+                      final options = categoryData['options'] as List;
+                      final prices = categoryData['prices'] as List;
+                      
+                      final index = options.indexOf(option);
+                      if (index >= 0 && index < prices.length && prices[index] is num) {
+                        customizationsPrice += (prices[index] as num).toDouble();
+                      }
+                    }
+                  }
+                });
+              }
+              
+              // Use setModalState to update the local state
+              setModalState(() {
+                totalPrice = (basePrice + customizationsPrice) * quantity;
+              });
+            }
+            
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
               decoration: const BoxDecoration(
@@ -944,10 +1064,13 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                           
                           // Category chip
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isTablet ? 8 : 6, 
+                              vertical: isTablet ? 3 : 2
+                            ),
                             decoration: BoxDecoration(
                               color: _getCategoryColor(product.category).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: _getCategoryColor(product.category).withOpacity(0.3),
                                 width: 1,
@@ -956,7 +1079,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                             child: Text(
                               product.category,
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: isTablet ? 11 : 9,
                                 fontWeight: FontWeight.w500,
                                 color: _getCategoryColor(product.category),
                               ),
@@ -1054,7 +1177,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                                           value: option,
                                           groupValue: _selectedOptions[categoryName],
                                           onChanged: (value) {
-                                            setState(() {
+                                            setModalState(() {
                                               if (value != null) {
                                                 _selectedOptions[categoryName] = value;
                                                 _updateTotalPrice();
@@ -1096,7 +1219,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                             ),
                             maxLines: 2,
                             onChanged: (value) {
-                              _specialInstructions = value;
+                              specialInstructions = value;
                             },
                           ),
                           const SizedBox(height: 24),
@@ -1132,12 +1255,12 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                               IconButton(
                                 icon: Icon(
                                   Icons.remove,
-                                  color: _quantity > 1 ? AppTheme.primaryColor : Colors.grey,
+                                  color: quantity > 1 ? AppTheme.primaryColor : Colors.grey,
                                 ),
-                                onPressed: _quantity > 1
+                                onPressed: quantity > 1
                                     ? () {
-                                        setState(() {
-                                          _quantity--;
+                                        setModalState(() {
+                                          quantity--;
                                           _updateTotalPrice();
                                         });
                                       }
@@ -1153,7 +1276,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                               SizedBox(
                                 width: 36,
                                 child: Text(
-                                  _quantity.toString(),
+                                  quantity.toString(),
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     fontSize: 16,
@@ -1168,8 +1291,8 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                                   color: AppTheme.primaryColor,
                                 ),
                                 onPressed: () {
-                                  setState(() {
-                                    _quantity++;
+                                  setModalState(() {
+                                    quantity++;
                                     _updateTotalPrice();
                                   });
                                 },
@@ -1191,9 +1314,10 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                               // Add item to cart
                               _addToCart(
                                 product, 
-                                quantity: _quantity,
+                                quantity: quantity,
                                 selectedOptions: _selectedOptions.values.toList(),
-                                specialInstructions: _specialInstructions.isNotEmpty ? _specialInstructions : null,
+                                specialInstructions: specialInstructions?.isNotEmpty == true ? specialInstructions : null,
+                                totalPrice: totalPrice,
                               );
                               Navigator.pop(context);
                             } : null,
@@ -1207,7 +1331,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                             ),
                             child: Text(
                               widget.isOpen
-                                ? 'Add to Cart - ${_currencyFormat.format(_totalPrice.toInt())}'
+                                ? 'Add to Cart - ${_currencyFormat.format(totalPrice)}'
                                 : 'Store Closed',
                               style: const TextStyle(
                                 fontSize: 16,
@@ -1235,12 +1359,14 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     int quantity = 1,
     List<String>? selectedOptions,
     String? specialInstructions,
+    double? totalPrice,
   }) {
     _cartService.addToCart(
       product,
       quantity: quantity,
       selectedOptions: selectedOptions,
       specialInstructions: specialInstructions,
+      totalPrice: totalPrice,
     );
     
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1290,33 +1416,54 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
         return;
       }
       
-      print('Starting chat - User ID: ${currentUser.uid}, Merchant ID: ${widget.merchantId}');
-      
-      // Create or get conversation
-      final conversationId = await _chatService.createOrGetConversation(
-        currentUser.uid,
-        widget.merchantId,
-      );
-      
-      print('Conversation created/retrieved with ID: $conversationId');
-      
-      setState(() {
-        _isLoading = false;
-      });
-      
-      if (!mounted) return;
-      
-      // Navigate to chat detail screen
-      Navigator.push(
-        context, 
-        MaterialPageRoute(
-          builder: (context) => ChatDetailScreen(
-            conversationId: conversationId,
-            otherUserId: widget.merchantId,
-            otherUserName: widget.merchantName,
+      try {
+        // Create or get conversation (will throw an exception if no active order exists)
+        final conversationId = await _chatService.createOrGetConversation(
+          currentUser.uid,
+          widget.merchantId,
+        );
+        
+        setState(() {
+          _isLoading = false;
+        });
+        
+        if (!mounted) return;
+        
+        // Navigate to chat detail screen
+        Navigator.push(
+          context, 
+          MaterialPageRoute(
+            builder: (context) => ChatDetailScreen(
+              conversationId: conversationId,
+              otherUserId: widget.merchantId,
+              otherUserName: widget.merchantName,
+            ),
           ),
-        ),
-      );
+        );
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+        
+        if (!mounted) return;
+        
+        // Show a specific message to inform the user that chat is only available during active orders
+        if (e.toString().contains('No active orders found')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Chat is only available during active orders. Please place an order first.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to start chat: ${e.toString()}'),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
     } catch (e) {
       print('Error in _startChat: $e');
       setState(() {

@@ -11,6 +11,8 @@ class UserModel {
   final bool isActive;
   final DateTime createdAt;
   final DateTime? lastLogin;
+  final String? activeDeviceId;
+  final DateTime? lastDeviceLogin;
 
   UserModel({
     required this.id,
@@ -23,6 +25,8 @@ class UserModel {
     this.isActive = true,
     required this.createdAt,
     this.lastLogin,
+    this.activeDeviceId,
+    this.lastDeviceLogin,
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String id) {
@@ -37,6 +41,8 @@ class UserModel {
       isActive: map['isActive'] ?? true,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lastLogin: (map['lastLogin'] as Timestamp?)?.toDate(),
+      activeDeviceId: map['activeDeviceId'],
+      lastDeviceLogin: (map['lastDeviceLogin'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -51,6 +57,8 @@ class UserModel {
       'isActive': isActive,
       'createdAt': createdAt,
       'lastLogin': lastLogin,
+      'activeDeviceId': activeDeviceId,
+      'lastDeviceLogin': lastDeviceLogin,
     };
   }
 
@@ -65,6 +73,8 @@ class UserModel {
     bool? isActive,
     DateTime? createdAt,
     DateTime? lastLogin,
+    String? activeDeviceId,
+    DateTime? lastDeviceLogin,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -77,6 +87,8 @@ class UserModel {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
+      activeDeviceId: activeDeviceId ?? this.activeDeviceId,
+      lastDeviceLogin: lastDeviceLogin ?? this.lastDeviceLogin,
     );
   }
 

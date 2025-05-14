@@ -151,6 +151,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // User Favorites collection rules
+    match /userFavorites/{userId} {
+      // Users can read and write their own favorites
+      allow read, write: if isOwner(userId);
+      
+      // Admins can read and write all favorites
+      allow read, write: if isAdmin();
+    }
+    
     // Default deny all
     match /{document=**} {
       allow read, write: if isAdmin();

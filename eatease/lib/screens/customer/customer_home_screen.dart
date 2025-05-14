@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/product_service.dart';
 import '../../models/product_model.dart';
@@ -12,12 +13,18 @@ import 'cart_screen.dart';
 import 'store_detail_screen.dart';
 import 'dart:convert';
 import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
 
   // Static favorites that persists across instances
   static ValueNotifier<Set<String>> favoritesNotifier = ValueNotifier<Set<String>>({});
+
+  // Add a debug method to print the current favorites
+  static void debugPrintFavorites() {
+    print('DEBUG FAVORITES: Currently ${favoritesNotifier.value.length} favorites: ${favoritesNotifier.value.toList()}');
+  }
 
   @override
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
@@ -57,42 +64,42 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     {
       'name': 'All',
       'emoji': '🍽️',
-      'color': Color(0xFF5C6BC0),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Appetizer',
       'emoji': '🍲',
-      'color': Color(0xFF26A69A),
+      'color': AppTheme.customerSecondaryColor,
     },
     {
       'name': 'Main Course',
       'emoji': '🥘',
-      'color': Color(0xFFFFA726),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Dessert',
       'emoji': '🍰',
-      'color': Color(0xFFEF5350),
+      'color': AppTheme.customerSecondaryColor,
     },
     {
       'name': 'Beverage',
       'emoji': '🥤',
-      'color': Color(0xFFEC407A),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Sides',
       'emoji': '🍟',
-      'color': Color(0xFF66BB6A),
+      'color': AppTheme.customerSecondaryColor,
     },
     {
       'name': 'Breakfast',
       'emoji': '🍳',
-      'color': Color(0xFFFFD54F),
+      'color': AppTheme.customerPrimaryColor,
     },
     {
       'name': 'Fast Food',
       'emoji': '🍔',
-      'color': Color(0xFFFF7043),
+      'color': AppTheme.customerSecondaryColor,
     },
   ];
 
@@ -129,7 +136,25 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   void initState() {
     super.initState();
     print('CUSTOMER HOME: Initializing customer home screen');
-    _loadFavorites();
+    
+    // Make sure the static favorites notifier is initialized
+    if (CustomerHomeScreen.favoritesNotifier.value.isEmpty) {
+      print('CUSTOMER HOME: Initializing empty favorites notifier');
+      CustomerHomeScreen.favoritesNotifier = ValueNotifier<Set<String>>({});
+    }
+    
+    // Load favorites
+    _loadFavorites().then((_) {
+      print('CUSTOMER HOME: Favorites loaded in initState');
+      CustomerHomeScreen.debugPrintFavorites();
+      
+      if (mounted) {
+        setState(() {
+          // Trigger a rebuild once favorites are loaded
+        });
+      }
+    });
+    
     _initializeData();
     _loadUserRole();
     
@@ -168,29 +193,57 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   // Load favorites from Firestore
   Future<void> _loadFavorites() async {
     try {
-      print('FAVORITES: Loading favorites from Firestore');
+      print('FAVORITES-LOAD: Loading favorites from Firestore');
+      
       final user = _authService.currentUser;
       if (user == null) {
-        print('FAVORITES: No user logged in, skipping load');
+        print('FAVORITES-LOAD: No user logged in, skipping load');
         return; // Not logged in
       }
       
-      print('FAVORITES: Getting doc for user ${user.uid}');
-      final doc = await FirebaseFirestore.instance
+      print('FAVORITES-LOAD: Getting doc for user ${user.uid}');
+      
+      // Try to get the document with a timeout
+      final docFuture = FirebaseFirestore.instance
           .collection('userFavorites')
           .doc(user.uid)
           .get();
+          
+      DocumentSnapshot<Map<String, dynamic>>? doc;
+      try {
+        doc = await docFuture.timeout(const Duration(seconds: 5));
+      } catch (timeoutError) {
+        print('FAVORITES-LOAD: Timeout getting favorites, using cached data');
+        // Return early to keep current favorites
+        return;
+      }
       
       if (doc.exists && doc.data() != null && doc.data()!.containsKey('favorites')) {
-        final favorites = List<String>.from(doc.data()!['favorites'] ?? []);
-        print('FAVORITES: Loaded ${favorites.length} favorites from Firestore');
+        final List<dynamic> favoritesData = doc.data()!['favorites'] ?? [];
+        // Convert to a list of strings, filtering out any non-string values
+        final List<String> favorites = favoritesData
+            .where((item) => item is String)
+            .map((item) => item as String)
+            .toList();
+            
+        print('FAVORITES-LOAD: Loaded ${favorites.length} favorites from Firestore: $favorites');
+        
+        // Update the notifier to trigger UI updates
         _favoriteItemsNotifier.value = Set<String>.from(favorites);
-        print('FAVORITES: Updated notifier with values: ${_favoriteItemsNotifier.value}');
+        
+        print('FAVORITES-LOAD: Updated notifier with values: ${_favoriteItemsNotifier.value}');
+        CustomerHomeScreen.debugPrintFavorites();
       } else {
-        print('FAVORITES: No favorites found in Firestore');
+        print('FAVORITES-LOAD: No favorites found in Firestore, setting empty set');
+        // Reset to empty if Firestore has no data
+        _favoriteItemsNotifier.value = {}; 
       }
     } catch (e) {
-      print('FAVORITES: Error loading favorites: $e');
+      print('FAVORITES-LOAD: Error loading favorites: $e');
+      print('FAVORITES-LOAD: Stack trace: ${StackTrace.current}');
+      
+      // Don't clear existing favorites on error, to prevent data loss
+      print('FAVORITES-LOAD: Keeping existing favorites due to error');
     }
   }
   
@@ -198,6 +251,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Future<void> _saveFavorites() async {
     try {
       print('FAVORITES: Attempting to save favorites');
+      CustomerHomeScreen.debugPrintFavorites(); // Debug before saving
+      
       final user = _authService.currentUser;
       if (user == null) {
         print('FAVORITES: No user logged in, skipping save');
@@ -216,23 +271,93 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           }, SetOptions(merge: true));
       
       print('FAVORITES: Successfully saved favorites to Firestore');
+      CustomerHomeScreen.debugPrintFavorites(); // Debug after saving
     } catch (e) {
       print('FAVORITES: Error saving favorites: $e');
+      print('FAVORITES: Stack trace: ${StackTrace.current}');
+      
+      // Show error only if we're mounted
+      if (mounted) {
+        // Don't show a visual error to the user, but restore the previous state if needed
+        // This keeps the app experience smooth even if there's a network issue
+      }
     }
   }
 
   // Toggle favorite status of a product
   void _toggleFavorite(String productId) {
-    final currentFavorites = Set<String>.from(_favoriteItems);
-    if (currentFavorites.contains(productId)) {
-      currentFavorites.remove(productId);
-    } else {
-      currentFavorites.add(productId);
+    try {
+      // Log the action
+      print('TOGGLE: Starting favorite toggle for $productId');
+      
+      // Get the current user
+      final user = _authService.currentUser;
+      if (user == null) {
+        print('TOGGLE: Cannot toggle - no user logged in');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You need to be logged in to save favorites')),
+        );
+        return;
+      }
+      
+      // Provide haptic feedback for immediate response
+      HapticFeedback.mediumImpact();
+      
+      // Get current favorites (local copy)
+      final currentFavorites = Set<String>.from(_favoriteItemsNotifier.value);
+      final isCurrentlyFavorite = currentFavorites.contains(productId);
+      
+      print('TOGGLE: Current status - is favorite: $isCurrentlyFavorite');
+      print('TOGGLE: Favorites before: ${currentFavorites.toList()}');
+      
+      // Update local UI immediately
+      if (isCurrentlyFavorite) {
+        currentFavorites.remove(productId);
+      } else {
+        currentFavorites.add(productId);
+      }
+      
+      // Update the UI via the notifier
+      _favoriteItemsNotifier.value = currentFavorites;
+      
+      print('TOGGLE: UI updated with new favorites: ${_favoriteItemsNotifier.value.toList()}');
+      
+      // Perform Firestore operation directly here
+      final userFavoritesRef = FirebaseFirestore.instance
+          .collection('userFavorites')
+          .doc(user.uid);
+      
+      // Update Firestore in the background
+      userFavoritesRef.set({
+        'favorites': currentFavorites.toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true)).then((_) {
+        print('TOGGLE: Successfully saved favorites to Firestore');
+      }).catchError((error) {
+        print('TOGGLE: Error saving favorites: $error');
+        // Revert the UI change on error
+        if (isCurrentlyFavorite) {
+          // It was favorite, add it back
+          final revertedFavorites = Set<String>.from(_favoriteItemsNotifier.value);
+          revertedFavorites.add(productId);
+          _favoriteItemsNotifier.value = revertedFavorites;
+        } else {
+          // It wasn't favorite, remove it again
+          final revertedFavorites = Set<String>.from(_favoriteItemsNotifier.value);
+          revertedFavorites.remove(productId);
+          _favoriteItemsNotifier.value = revertedFavorites;
+        }
+        
+        // Show error to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update favorites: $error')),
+          );
+        }
+      });
+    } catch (e) {
+      print('TOGGLE: Unexpected error: $e');
     }
-    _favoriteItemsNotifier.value = currentFavorites;
-    
-    // Save favorites to Firestore
-    _saveFavorites();
   }
 
   void _showProductDetails(ProductModel product) {
@@ -261,7 +386,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         _isRefreshing = true;
       });
       
-      final products = await _productService.getAllAvailableProducts().first;
+      // Add timeout to prevent indefinite loading
+      final products = await _productService.getAllAvailableProducts().first
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        print('Product loading timed out, using cached data if available');
+        return _cachedProducts ?? [];
+      });
       
       // Store products in memory cache for faster access
       for (var product in products) {
@@ -281,6 +411,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       print('Error loading products: $e');
       setState(() {
         _isRefreshing = false;
+        // Make sure we have something to display even if there's an error
+        if (_cachedProducts == null) {
+          _cachedProducts = [];
+          _displayedProducts = [];
+        }
       });
     }
   }
@@ -360,7 +495,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   
   void _applyFilters() {
     if (_cachedProducts == null) {
-      _displayedProducts = [];
+      setState(() {
+        _displayedProducts = [];
+        _isRefreshing = false;
+      });
       return;
     }
     
@@ -373,8 +511,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       return matchesCategory && product.isAvailable && matchesSearch;
     }).toList();
     
-    // First apply initial sorting by name
+    // Apply initial sorting by name immediately
     filteredProducts.sort((a, b) => a.name.compareTo(b.name));
+    
+    // Set initial display of products without waiting for merchant data
+    setState(() {
+      _displayedProducts = filteredProducts.take(_productsPerPage).toList();
+      _isRefreshing = false;
+    });
     
     // Then load store open/closed status for all products and re-sort
     _loadMerchantDataForProducts(filteredProducts).then((productsWithStoreStatus) {
@@ -413,13 +557,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     // Create a map to avoid duplicate merchant data requests
     final merchantDataCache = <String, Map<String, dynamic>>{};
     
-    // Process each product
+    // Collect unique merchant IDs
+    final Set<String> uniqueMerchantIds = products.map((p) => p.merchantId).toSet();
+    
+    // Batch fetch merchant data
+    final futures = uniqueMerchantIds.map((id) => _getMerchantData(id));
+    final merchantDataResults = await Future.wait(futures);
+    
+    // Create merchant data cache
+    for (int i = 0; i < uniqueMerchantIds.length; i++) {
+      merchantDataCache[uniqueMerchantIds.elementAt(i)] = merchantDataResults[i];
+    }
+    
+    // Process each product with the cached merchant data
     for (final product in products) {
-      // Check if we already have data for this merchant
-      if (!merchantDataCache.containsKey(product.merchantId)) {
-        merchantDataCache[product.merchantId] = await _getMerchantData(product.merchantId);
-      }
-      
       final merchantData = merchantDataCache[product.merchantId]!;
       final isOpen = merchantData['isOpen'] as bool? ?? true;
       
@@ -803,8 +954,23 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   
   Widget _buildProductsGrid() {
     if (_isRefreshing) {
-      return const SliverFillRemaining(
-        child: Center(child: CircularProgressIndicator()),
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Loading menu items...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
     
@@ -837,12 +1003,31 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       _getStoreOpenStatus(product.merchantId);
     }
     
+    // Determine grid layout based on screen width
+    final double width = MediaQuery.of(context).size.width;
+    int crossAxisCount;
+    double childAspectRatio;
+    
+    if (width > 900) {
+      // Large tablet
+      crossAxisCount = 4;
+      childAspectRatio = 0.85;
+    } else if (width > 600) {
+      // Medium tablet
+      crossAxisCount = 3;
+      childAspectRatio = 0.8;
+    } else {
+      // Phone
+      crossAxisCount = 2;
+      childAspectRatio = 0.75;
+    }
+    
     return SliverPadding(
       padding: const EdgeInsets.all(16),
       sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.75,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          childAspectRatio: childAspectRatio,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
         ),
@@ -860,7 +1045,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 return _ProductCard(
                   product: product,
                   currencyFormat: currencyFormat,
-                  isFavorite: _favoriteItems.contains(product.id),
                   onToggleFavorite: () => _toggleFavorite(product.id),
                   onTap: () => _showProductDetails(product),
                   isStoreOpen: isStoreOpen,
@@ -1144,22 +1328,23 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         ValueListenableBuilder<Set<String>>(
                           valueListenable: _favoriteItemsNotifier,
                           builder: (context, favoriteIds, _) {
-                            return IconButton(
-                              icon: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 300),
-                                child: Icon(
-                                  favoriteIds.contains(product.id) ? 
-                                    Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                  color: favoriteIds.contains(product.id) ? 
-                                    Colors.red : Colors.grey.shade600,
-                                  key: ValueKey<bool>(favoriteIds.contains(product.id)),
-                                ),
-                              ),
-                              onPressed: () {
+                            final isFavoriteNow = favoriteIds.contains(product.id);
+                            return GestureDetector(
+                              onTap: () {
+                                // Call the provided callback that will do the toggle
                                 _toggleFavorite(product.id);
                               },
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
+                              child: Container(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                child: Icon(
+                                  isFavoriteNow
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                  color: isFavoriteNow ? Colors.red : Colors.grey.shade600,
+                                  size: 20,
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -1293,7 +1478,6 @@ class _CategoryItem extends StatelessWidget {
 class _ProductCard extends StatelessWidget {
   final ProductModel product;
   final NumberFormat currencyFormat;
-  final bool isFavorite;
   final VoidCallback onToggleFavorite;
   final VoidCallback onTap;
   final bool isStoreOpen;
@@ -1301,7 +1485,6 @@ class _ProductCard extends StatelessWidget {
   const _ProductCard({
     required this.product,
     required this.currencyFormat,
-    required this.isFavorite,
     required this.onToggleFavorite,
     required this.onTap,
     required this.isStoreOpen,
@@ -1309,163 +1492,138 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
+    // Check if we're on a tablet
+    final double width = MediaQuery.of(context).size.width;
+    final bool isTablet = width > 600;
+    
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Product image
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: SizedBox(
-                    height: 110,
-                    width: double.infinity,
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Stack(
+                children: [
+                  AspectRatio(
+                    aspectRatio: isTablet ? 1.4 / 1 : 1.2 / 1, // Slightly wider for tablet
                     child: product.imageUrls.isNotEmpty
-                        ? Image.network(
-                            product.imageUrls.first,
+                        ? CachedNetworkImage(
+                            imageUrl: product.imageUrls.first,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            placeholder: (context, url) => Container(
                               color: Colors.grey.shade200,
-                              child: const Icon(
-                                Icons.image_not_supported,
-                                size: 32,
-                                color: Colors.grey,
+                              child: const Center(
+                                child: CircularProgressIndicator(),
                               ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image, size: 50, color: Colors.grey),
                             ),
                           )
                         : Container(
                             color: Colors.grey.shade200,
-                            child: const Icon(
-                              Icons.image_not_supported,
-                              size: 32,
-                              color: Colors.grey,
-                            ),
+                            child: const Icon(Icons.image, size: 50, color: Colors.grey),
                           ),
                   ),
-                ),
-                // Favorite button
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: onToggleFavorite,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        isFavorite
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        size: 20,
-                        color: isFavorite ? Colors.red : Colors.grey,
-                      ),
-                    ),
-                  ),
-                ),
-                // Add closed indicator on the image if store is closed
-                if (!isStoreOpen)
+                  // Favorite button
                   Positioned(
                     top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'Closed',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                    right: 8,
+                    child: ValueListenableBuilder<Set<String>>(
+                      valueListenable: CustomerHomeScreen.favoritesNotifier,
+                      builder: (context, favorites, _) {
+                        final isFavoriteNow = favorites.contains(product.id);
+                        return GestureDetector(
+                          onTap: () {
+                            // Provide haptic feedback
+                            HapticFeedback.lightImpact();
+                            onToggleFavorite();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              isFavoriteNow
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 18,
+                              color: isFavoriteNow ? Colors.red : Colors.grey,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // Add closed indicator on the image if store is closed
+                  if (!isStoreOpen)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'Closed',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-            
             // Product details
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(10),
+                padding: EdgeInsets.all(isTablet ? 8 : 6), // Slightly more padding on tablet
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       product.name,
-                      style: const TextStyle(
-                        fontSize: 14,
+                      style: TextStyle(
+                        fontSize: isTablet ? 15 : 14, // Slightly larger text on tablet
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
-                    // Rating stars instead of description
-                    Row(
-                      children: [
-                        ...List.generate(5, (index) {
-                          // Calculate rating (random between 3.0-5.0 for demo purposes)
-                          // In real app, you'd use actual product rating
-                          final rating = (product.id.hashCode % 20 + 30) / 10;
-                          return Icon(
-                            index < rating.floor()
-                                ? Icons.star
-                                : (index < rating.ceil() && index >= rating.floor())
-                                    ? Icons.star_half
-                                    : Icons.star_border,
-                            size: 13,
-                            color: Colors.amber,
-                          );
-                        }),
-                        const SizedBox(width: 3),
-                        Text(
-                          ((product.id.hashCode % 20 + 30) / 10).toStringAsFixed(1),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    // Spacer to push the category and price to the bottom
-                    const Spacer(),
-                    
+                    const SizedBox(height: 2),
                     // Category chip
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isTablet ? 8 : 6, 
+                        vertical: isTablet ? 3 : 2
+                      ),
                       decoration: BoxDecoration(
                         color: _getCategoryColor(product.category).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: _getCategoryColor(product.category).withOpacity(0.3),
                           width: 1,
@@ -1474,29 +1632,52 @@ class _ProductCard extends StatelessWidget {
                       child: Text(
                         product.category,
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: isTablet ? 11 : 9,
                           fontWeight: FontWeight.w500,
                           color: _getCategoryColor(product.category),
                         ),
                       ),
                     ),
-                    
-                    const SizedBox(height: 4),
-                    
-                    // Price and closed status in a row to save vertical space
+                    const SizedBox(height: 2),
+                    // Rating stars
                     Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            'Rp ${currencyFormat.format(product.price)}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: isStoreOpen ? AppTheme.primaryColor : Colors.grey,
-                            ),
+                        ...List.generate(5, (index) {
+                          final rating = (product.id.hashCode % 15 + 35) / 10; // Range 3.5-5.0
+                          return Icon(
+                            index < rating.floor()
+                                ? Icons.star
+                                : (index < rating.ceil() && index >= rating.floor())
+                                    ? Icons.star_half
+                                    : Icons.star_border,
+                            size: 10,
+                            color: Colors.amber,
+                          );
+                        }),
+                        const SizedBox(width: 2),
+                        Text(
+                          ((product.id.hashCode % 15 + 35) / 10).toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
                           ),
                         ),
-                        // Show closed text inline if store is closed
+                      ],
+                    ),
+                    const Spacer(),
+                    // Price and closed indicator
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Price
+                        Text(
+                          currencyFormat.format(product.price),
+                          style: TextStyle(
+                            fontSize: isTablet ? 14 : 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
                         if (!isStoreOpen)
                           Text(
                             'Closed',
@@ -1518,20 +1699,19 @@ class _ProductCard extends StatelessWidget {
     );
   }
   
-  // Helper method to get color for a category
+  // Helper method to get category color
   Color _getCategoryColor(String category) {
     final Map<String, Color> categoryColors = {
-      'All': Color(0xFF5C6BC0),
-      'Appetizer': Color(0xFF26A69A),
-      'Main Course': Color(0xFFFFA726),
-      'Dessert': Color(0xFFEF5350),
-      'Beverage': Color(0xFFEC407A),
-      'Sides': Color(0xFF66BB6A),
-      'Breakfast': Color(0xFFFFD54F),
-      'Fast Food': Color(0xFFFF7043),
+      'All': AppTheme.customerPrimaryColor,
+      'Appetizer': AppTheme.customerSecondaryColor,
+      'Main Course': AppTheme.customerPrimaryColor,
+      'Dessert': AppTheme.customerSecondaryColor,
+      'Beverage': AppTheme.customerPrimaryColor,
+      'Sides': AppTheme.customerSecondaryColor,
+      'Breakfast': AppTheme.customerPrimaryColor,
+      'Fast Food': AppTheme.customerSecondaryColor,
     };
     
-    // Return default color from map or a fallback color
-    return categoryColors[category] ?? AppTheme.primaryColor;
+    return categoryColors[category] ?? AppTheme.customerPrimaryColor;
   }
 } 

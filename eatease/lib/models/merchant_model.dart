@@ -20,6 +20,8 @@ class MerchantModel extends UserModel {
     bool isActive = true,
     required DateTime createdAt,
     DateTime? lastLogin,
+    String? activeDeviceId,
+    DateTime? lastDeviceLogin,
     this.storeName,
     this.storeDescription,
     this.storeAddress,
@@ -37,6 +39,8 @@ class MerchantModel extends UserModel {
           isActive: isActive,
           createdAt: createdAt,
           lastLogin: lastLogin,
+          activeDeviceId: activeDeviceId,
+          lastDeviceLogin: lastDeviceLogin,
         );
 
   factory MerchantModel.fromMap(Map<String, dynamic> map, String id) {
@@ -51,6 +55,8 @@ class MerchantModel extends UserModel {
       isActive: map['isActive'] ?? true,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lastLogin: (map['lastLogin'] as Timestamp?)?.toDate(),
+      activeDeviceId: map['activeDeviceId'],
+      lastDeviceLogin: (map['lastDeviceLogin'] as Timestamp?)?.toDate(),
       storeName: map['storeName'],
       storeDescription: map['storeDescription'],
       storeAddress: map['storeAddress'],
@@ -74,6 +80,7 @@ class MerchantModel extends UserModel {
     };
   }
 
+  @override
   MerchantModel copyWith({
     String? id,
     String? email,
@@ -85,6 +92,8 @@ class MerchantModel extends UserModel {
     bool? isActive,
     DateTime? createdAt,
     DateTime? lastLogin,
+    String? activeDeviceId,
+    DateTime? lastDeviceLogin,
     String? storeName,
     String? storeDescription,
     String? storeAddress,
@@ -103,6 +112,8 @@ class MerchantModel extends UserModel {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
+      activeDeviceId: activeDeviceId ?? this.activeDeviceId,
+      lastDeviceLogin: lastDeviceLogin ?? this.lastDeviceLogin,
       storeName: storeName ?? this.storeName,
       storeDescription: storeDescription ?? this.storeDescription,
       storeAddress: storeAddress ?? this.storeAddress,
