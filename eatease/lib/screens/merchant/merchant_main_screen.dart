@@ -3,6 +3,7 @@ import '../../services/auth/auth_service.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import 'merchant_home_screen.dart';
 import 'product_list_screen.dart';
+import 'product_form_screen.dart';
 import 'merchant_orders_screen.dart';
 import 'merchant_settings_screen.dart';
 import '../../routes.dart';
@@ -131,12 +132,24 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
             'My Products',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          backgroundColor: AppTheme.primaryColor,
+          backgroundColor: Color(0xFF2D664A),
           actions: [
             IconButton(
               icon: const Icon(Icons.add, size: 26),
-              onPressed: () {
-                Navigator.pushNamed(context, AppRoutes.merchantProductsAdd);
+              onPressed: () async {
+                final productAdded = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProductFormScreen(),
+                  ),
+                );
+                
+                // If the product was added, refresh the list
+                if (productAdded == true && mounted) {
+                  setState(() {
+                    // This will trigger a rebuild which will re-fetch the product list
+                  });
+                }
               },
             ),
           ],
@@ -144,7 +157,7 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
       case 2: // Orders tab
         return AppBar(
           title: const Text('Orders'),
-          backgroundColor: AppTheme.primaryColor,
+          backgroundColor: Color(0xFF2D664A),
           bottom: TabBar(
             controller: _ordersTabController,
             tabs: const [
@@ -163,7 +176,7 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
             'Customer Messages',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          backgroundColor: AppTheme.primaryColor,
+          backgroundColor: Color(0xFF2D664A),
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -185,12 +198,12 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
             'Settings',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          backgroundColor: AppTheme.primaryColor,
+          backgroundColor: Color(0xFF2D664A),
         );
       default:
         return AppBar(
           title: const Text('Merchant'),
-          backgroundColor: AppTheme.primaryColor,
+          backgroundColor: Color(0xFF2D664A),
         );
     }
   }
@@ -240,7 +253,7 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
       appBar: _getAppBar(),
       body: _getBody(),
       bottomNavigationBar: Container(
-        height: 60,
+        height: 70,
         margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -269,6 +282,16 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
   
   Widget _buildNavItem({required IconData icon, required int index, required bool isSelected}) {
     final Color primaryColor = AppTheme.getPrimaryColor('merchant');
+    
+    // Get label text based on index
+    String labelText = '';
+    switch(index) {
+      case 0: labelText = 'Home'; break;
+      case 1: labelText = 'Products'; break;
+      case 2: labelText = 'Orders'; break;
+      case 3: labelText = 'Chat'; break;
+      case 4: labelText = 'Settings'; break;
+    }
     
     return Expanded(
       child: Material(
@@ -307,7 +330,16 @@ class _MerchantMainScreenState extends State<MerchantMainScreen> with SingleTick
                 Icon(
                   icon,
                   color: isSelected ? primaryColor : Colors.grey.shade400,
-                  size: 24,
+                  size: 22,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  labelText,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? primaryColor : Colors.grey.shade400,
+                  ),
                 ),
               ],
             ),

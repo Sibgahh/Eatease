@@ -376,8 +376,8 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                       // Phone number field
                       _buildNeumorphicTextField(
                         controller: _phoneNumberController,
-                        label: 'Phone Number',
-                        icon: Icons.phone,
+                        label: 'Student Number',
+                        icon: Icons.school,
                         keyboardType: TextInputType.phone,
                       ),
                       

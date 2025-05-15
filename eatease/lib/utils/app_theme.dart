@@ -9,7 +9,8 @@ class AppTheme {
   static const Color customerPrimaryColor = Color(0xFF2D664A);  // Primary Green
   static const Color customerSecondaryColor = Color(0xFFEEAD55);  // Secondary Orange
   static const Color customerAccentColor = Color(0xFFF6E8CF);  // Light Beige
-  static const Color merchantPrimaryColor = Color(0xFFFF9800);  // Orange
+  static const Color merchantPrimaryColor = Color(0xFF2D664A);  // Green
+  static const Color merchantSecondaryColor = Color(0xFF3F51B5);  // Indigo Blue
   static const Color adminPrimaryColor = Color(0xFF212121);     // Dark Grey
   
   // Common Colors
@@ -52,7 +53,7 @@ class AppTheme {
       case 'customer':
         return customerSecondaryColor;
       case 'merchant':
-        return merchantPrimaryColor;
+        return merchantSecondaryColor;
       case 'admin':
         return adminPrimaryColor;
       default:

@@ -34,6 +34,11 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
   bool _hasRequiredFields = false;
   String _userEmail = '';
   
+  // Track button press states for neumorphic effect
+  bool _saveButtonPressed = false;
+  bool _logoutButtonPressed = false;
+  bool _changePasswordPressed = false;
+  
   // Cache for merchant data
   static MerchantModel? _cachedMerchantModel;
   
@@ -111,6 +116,7 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
     
     setState(() {
       _isSaving = true;
+      _saveButtonPressed = true;
       _errorMessage = '';
     });
     
@@ -136,6 +142,7 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
         if (mounted) {
           setState(() {
             _hasRequiredFields = true;
+            _saveButtonPressed = false;
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
@@ -163,11 +170,13 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
       } else {
         setState(() {
           _errorMessage = 'Failed to save store settings';
+          _saveButtonPressed = false;
         });
       }
     } catch (e) {
       setState(() {
         _errorMessage = 'Error saving store settings: $e';
+        _saveButtonPressed = false;
       });
     } finally {
       if (mounted) {
@@ -235,7 +244,7 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
                 'Settings',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              backgroundColor: AppTheme.primaryColor,
+              backgroundColor: AppTheme.merchantPrimaryColor,
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -267,101 +276,23 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
                 },
               ),
             ),
+            backgroundColor: AppTheme.neumorphismBackground,
             body: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : SingleChildScrollView(
+                : _buildBody(),
+          )
+        : _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _buildBody();
+  }
+
+  Widget _buildBody() {
+    return SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header with user profile
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor,
-                            borderRadius: const BorderRadius.only(
-                              bottomLeft: Radius.circular(30),
-                              bottomRight: Radius.circular(30),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
-                            child: Column(
-                              children: [
-                                // User avatar and info
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 80,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(0.1),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 3,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          _storeNameController.text.isNotEmpty 
-                                              ? _storeNameController.text[0].toUpperCase()
-                                              : 'M',
-                                          style: TextStyle(
-                                            fontSize: 32,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppTheme.primaryColor,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 20),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _storeNameController.text.isNotEmpty 
-                                                ? _storeNameController.text 
-                                                : 'Your Store',
-                                            style: const TextStyle(
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _userEmail,
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.white.withOpacity(0.9),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+          // Header with user profile - unique design
+          _buildUniqueHeader(),
                         
                         // Setup reminder if needed
                         if (widget.redirectedForSetup)
@@ -411,155 +342,53 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
                             ),
                           ),
                         
-                        // Main content with settings cards
+          // Main content with settings sections
                         Padding(
                           padding: const EdgeInsets.all(24.0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Account Settings Card
-                              _buildSettingsCard(
-                                title: 'Account Settings',
-                                icon: Icons.person,
-                                iconColor: Colors.blue,
-                                children: [
-                                  _buildSettingsTile(
-                                    title: 'Change Password',
-                                    icon: Icons.lock_outline,
-                                    onTap: _showChangePasswordDialog,
-                                  ),
-                                  _buildSettingsTile(
-                                    title: 'Logout',
-                                    icon: Icons.logout,
-                                    iconColor: Colors.red,
-                                    onTap: _showLogoutConfirmation,
-                                  ),
-                                ],
-                              ),
-                              
-                              const SizedBox(height: 24),
-                              
-                              // Store Information Card
-                              _buildSettingsCard(
+                // Account Settings Section
+                Form(
+                  key: _formKey,
+                  child: _buildNeumorphicSection(
                                 title: 'Store Information',
                                 icon: Icons.store,
-                                iconColor: Colors.green,
                                 children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Form(
-                                      key: _formKey,
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                                        children: [
-                                          TextFormField(
+                      _buildNeumorphicTextField(
                                             controller: _storeNameController,
-                                            decoration: InputDecoration(
-                                              labelText: 'Store Name *',
+                        label: 'Store Name',
+                        icon: Icons.store,
                                               hintText: 'Enter your store name',
-                                              labelStyle: TextStyle(color: Colors.grey.shade700),
-                                              border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                              ),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade50,
-                                              contentPadding: const EdgeInsets.all(16),
-                                              prefixIcon: const Icon(Icons.store, color: Colors.green),
-                                            ),
                                             validator: (value) {
                                               if (value == null || value.isEmpty) {
                                                 return 'Please enter your store name';
                                               }
                                               return null;
                                             },
+                        isRequired: true,
                                           ),
-                                          const SizedBox(height: 20.0),
                                           
-                                          TextFormField(
+                      _buildNeumorphicTextField(
                                             controller: _storeDescriptionController,
-                                            decoration: InputDecoration(
-                                              labelText: 'Store Description',
+                        label: 'Store Description',
+                        icon: Icons.description,
                                               hintText: 'Describe your store to customers',
-                                              labelStyle: TextStyle(color: Colors.grey.shade700),
-                                              border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                              ),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade50,
-                                              contentPadding: const EdgeInsets.all(16),
-                                              prefixIcon: const Icon(Icons.description, color: Colors.green),
-                                            ),
                                             maxLines: 3,
                                           ),
-                                          const SizedBox(height: 20.0),
                                           
-                                          TextFormField(
+                      _buildNeumorphicTextField(
                                             controller: _storeAddressController,
-                                            decoration: InputDecoration(
-                                              labelText: 'Store Address',
+                        label: 'Store Address',
+                        icon: Icons.location_on,
                                               hintText: 'Enter your store address',
-                                              labelStyle: TextStyle(color: Colors.grey.shade700),
-                                              border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                              ),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade50,
-                                              contentPadding: const EdgeInsets.all(16),
-                                              prefixIcon: const Icon(Icons.location_on, color: Colors.green),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 20.0),
-                                          
-                                          TextFormField(
+                      ),
+                      
+                      _buildNeumorphicTextField(
                                             controller: _phoneController,
-                                            decoration: InputDecoration(
-                                              labelText: 'Phone Number *',
+                        label: 'Phone Number',
+                        icon: Icons.phone,
                                               hintText: 'Enter your phone number',
-                                              labelStyle: TextStyle(color: Colors.grey.shade700),
-                                              border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: Colors.grey.shade300),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12.0),
-                                                borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                              ),
-                                              filled: true,
-                                              fillColor: Colors.grey.shade50,
-                                              contentPadding: const EdgeInsets.all(16),
-                                              prefixIcon: const Icon(Icons.phone, color: Colors.green),
-                                            ),
                                             keyboardType: TextInputType.phone,
                                             validator: (value) {
                                               if (value == null || value.isEmpty) {
@@ -567,58 +396,11 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
                                               }
                                               return null;
                                             },
+                        isRequired: true,
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              
-                              const SizedBox(height: 24),
-                              
-                              // Notifications Settings Card
-                              _buildSettingsCard(
-                                title: 'Notifications',
-                                icon: Icons.notifications,
-                                iconColor: Colors.orange,
-                                children: [
-                                  _buildSettingsTile(
-                                    title: 'Push Notifications',
-                                    subtitle: 'Coming soon',
-                                    icon: Icons.notifications_active,
-                                    trailing: Switch(
-                                      value: false,
-                                      onChanged: (value) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('This feature is coming soon'),
-                                          ),
-                                        );
-                                      },
-                                      activeColor: AppTheme.primaryColor,
-                                    ),
-                                  ),
-                                  _buildSettingsTile(
-                                    title: 'Email Notifications',
-                                    subtitle: 'Coming soon',
-                                    icon: Icons.email,
-                                    trailing: Switch(
-                                      value: false,
-                                      onChanged: (value) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('This feature is coming soon'),
-                                          ),
-                                        );
-                                      },
-                                      activeColor: AppTheme.primaryColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              
-                              const SizedBox(height: 24),
+                ),
                               
                               // Error message if any
                               if (_errorMessage.isNotEmpty)
@@ -645,60 +427,58 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
                                 ),
                               
                               // Save button
-                              SizedBox(
-                                width: double.infinity,
-                                height: 54,
-                                child: ElevatedButton(
+                _buildNeumorphicButton(
+                  text: _isSaving ? 'Saving...' : 'Save Settings',
                                   onPressed: _isSaving ? null : _saveSettings,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.primaryColor,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12.0),
-                                    ),
-                                    elevation: 2,
-                                  ),
-                                  child: _isSaving
-                                      ? Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            SizedBox(
-                                              height: 20,
-                                              width: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2.0,
-                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            const Text(
-                                              'Saving...',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      : const Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.save),
-                                            SizedBox(width: 12),
-                                            Text(
-                                              'Save Settings',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                ),
+                  isPressed: _saveButtonPressed,
+                  onPressedChange: (value) => setState(() => _saveButtonPressed = value),
+                  backgroundColor: AppTheme.merchantPrimaryColor,
+                  textColor: Colors.white,
+                  icon: Icons.save,
                               ),
                               
                               const SizedBox(height: 24),
+
+                            _buildNeumorphicSection(
+                                title: 'Account Settings',
+                                icon: Icons.person,
+                                children: [
+                    _buildSettingOption(
+                                    icon: Icons.lock_outline,
+                      title: 'Change Password',
+                      onTap: () {
+                        setState(() => _changePasswordPressed = true);
+                        Future.delayed(const Duration(milliseconds: 150), () {
+                          setState(() => _changePasswordPressed = false);
+                          _showChangePasswordDialog();
+                        });
+                      },
+                      isPressed: _changePasswordPressed,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSettingOption(
+                                    icon: Icons.logout,
+                      title: 'Logout',
+                      textColor: Colors.red.shade700,
+                      iconColor: Colors.red.shade700,
+                      onTap: () {
+                        setState(() => _logoutButtonPressed = true);
+                        Future.delayed(const Duration(milliseconds: 150), () {
+                          setState(() => _logoutButtonPressed = false);
+                          _showLogoutConfirmation();
+                        });
+                      },
+                      isPressed: _logoutButtonPressed,
+                                  ),
+                                ],
+                              ),
                               
+                // Store Information Section
+                
+                            ],
+                          ),
+                        ),
+                                                      
                               // App Info
                               Center(
                                 child: Padding(
@@ -712,524 +492,385 @@ class _MerchantSettingsScreenState extends State<MerchantSettingsScreen> {
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
-                  ),
-          )
-        : SingleChildScrollView(
+    );
+  }
+  
+  // Unique header design with neumorphic elements
+  Widget _buildUniqueHeader() {
+    final storeName = _storeNameController.text.isNotEmpty 
+        ? _storeNameController.text 
+        : 'Your Store';
+    final storeInitial = storeName.isNotEmpty ? storeName[0].toUpperCase() : 'M';
+    
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.merchantPrimaryColor.withOpacity(0.8),
+            AppTheme.merchantPrimaryColor,
+          ],
+        ),
+      ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header with user profile
+          const SizedBox(height: 20),
+          // Store logo and name card
                 Container(
-                  width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(30),
-                      bottomRight: Radius.circular(30),
-                    ),
+              color: AppTheme.neumorphismBackground,
+              borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.15),
                         blurRadius: 10,
                         offset: const Offset(0, 5),
                       ),
                     ],
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
-                    child: Column(
+            child: Row(
                       children: [
-                        // User avatar and info
-                        Row(
-                          children: [
+                // Store logo/avatar with neumorphic design
                             Container(
                               width: 80,
                               height: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 3,
-                                ),
+                  decoration: AppTheme.getNeumorphismDecoration(
+                    borderRadius: 40,
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.merchantPrimaryColor.withOpacity(0.7),
+                            AppTheme.merchantPrimaryColor,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(30),
                               ),
                               child: Center(
                                 child: Text(
-                                  _storeNameController.text.isNotEmpty 
-                                      ? _storeNameController.text[0].toUpperCase()
-                                      : 'M',
-                                  style: TextStyle(
-                                    fontSize: 32,
+                          storeInitial,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 30,
                                     fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryColor,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 20),
+                  ),
+                ),
+                const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    _storeNameController.text.isNotEmpty 
-                                        ? _storeNameController.text 
-                                        : 'Your Store',
-                                    style: const TextStyle(
-                                      fontSize: 22,
+                      // Store name with subtle neumorphic effect
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: AppTheme.getNeumorphismDecoration(
+                          borderRadius: 12,
+                          isPressed: true,
+                        ),
+                        child: Text(
+                          storeName,
+                          style: TextStyle(
+                            fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                            color: AppTheme.merchantPrimaryColor,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _userEmail,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white.withOpacity(0.9),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                
-                // Setup reminder if needed
-                if (widget.redirectedForSetup)
+                      ),
+                      const SizedBox(height: 10),
+                      // Email with subtle design
                   Container(
-                    padding: const EdgeInsets.all(20.0),
-                    margin: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(16.0),
-                      border: Border.all(color: Colors.amber.shade300),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.amber.withOpacity(0.1),
-                          spreadRadius: 1,
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.grey.shade300,
+                            width: 1,
+                          ),
                         ),
-                      ],
-                    ),
-                    child: Column(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.amber.shade700, size: 28),
-                            const SizedBox(width: 12.0),
-                            const Expanded(
+                            Icon(
+                              Icons.email_outlined,
+                              size: 16,
+                              color: Colors.grey.shade700,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
                               child: Text(
-                                'Complete your store setup',
+                                _userEmail,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18.0,
-                                  color: Colors.black87,
+                                  fontSize: 12,
+                                  color: Colors.grey.shade700,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 12.0),
-                        const Text(
-                          'You need to set up your store information before you can start selling. Please provide your store name and phone number.',
-                          style: TextStyle(
-                            fontSize: 15,
-                            height: 1.4,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                
-                // Main content with settings cards
-                Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Account Settings Card
-                      _buildSettingsCard(
-                        title: 'Account Settings',
-                        icon: Icons.person,
-                        iconColor: Colors.blue,
-                        children: [
-                          _buildSettingsTile(
-                            title: 'Change Password',
-                            icon: Icons.lock_outline,
-                            onTap: _showChangePasswordDialog,
-                          ),
-                          _buildSettingsTile(
-                            title: 'Logout',
-                            icon: Icons.logout,
-                            iconColor: Colors.red,
-                            onTap: _showLogoutConfirmation,
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Store Information Card
-                      _buildSettingsCard(
-                        title: 'Store Information',
-                        icon: Icons.store,
-                        iconColor: Colors.green,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  TextFormField(
-                                    controller: _storeNameController,
-                                    decoration: InputDecoration(
-                                      labelText: 'Store Name *',
-                                      hintText: 'Enter your store name',
-                                      labelStyle: TextStyle(color: Colors.grey.shade700),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey.shade50,
-                                      contentPadding: const EdgeInsets.all(16),
-                                      prefixIcon: const Icon(Icons.store, color: Colors.green),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please enter your store name';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 20.0),
-                                  
-                                  TextFormField(
-                                    controller: _storeDescriptionController,
-                                    decoration: InputDecoration(
-                                      labelText: 'Store Description',
-                                      hintText: 'Describe your store to customers',
-                                      labelStyle: TextStyle(color: Colors.grey.shade700),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey.shade50,
-                                      contentPadding: const EdgeInsets.all(16),
-                                      prefixIcon: const Icon(Icons.description, color: Colors.green),
-                                    ),
-                                    maxLines: 3,
-                                  ),
-                                  const SizedBox(height: 20.0),
-                                  
-                                  TextFormField(
-                                    controller: _storeAddressController,
-                                    decoration: InputDecoration(
-                                      labelText: 'Store Address',
-                                      hintText: 'Enter your store address',
-                                      labelStyle: TextStyle(color: Colors.grey.shade700),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey.shade50,
-                                      contentPadding: const EdgeInsets.all(16),
-                                      prefixIcon: const Icon(Icons.location_on, color: Colors.green),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20.0),
-                                  
-                                  TextFormField(
-                                    controller: _phoneController,
-                                    decoration: InputDecoration(
-                                      labelText: 'Phone Number *',
-                                      hintText: 'Enter your phone number',
-                                      labelStyle: TextStyle(color: Colors.grey.shade700),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: Colors.grey.shade300),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                        borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey.shade50,
-                                      contentPadding: const EdgeInsets.all(16),
-                                      prefixIcon: const Icon(Icons.phone, color: Colors.green),
-                                    ),
-                                    keyboardType: TextInputType.phone,
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please enter your phone number';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Notifications Settings Card
-                      _buildSettingsCard(
-                        title: 'Notifications',
-                        icon: Icons.notifications,
-                        iconColor: Colors.orange,
-                        children: [
-                          _buildSettingsTile(
-                            title: 'Push Notifications',
-                            subtitle: 'Coming soon',
-                            icon: Icons.notifications_active,
-                            trailing: Switch(
-                              value: false,
-                              onChanged: (value) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('This feature is coming soon'),
-                                  ),
-                                );
-                              },
-                              activeColor: AppTheme.primaryColor,
-                            ),
-                          ),
-                          _buildSettingsTile(
-                            title: 'Email Notifications',
-                            subtitle: 'Coming soon',
-                            icon: Icons.email,
-                            trailing: Switch(
-                              value: false,
-                              onChanged: (value) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('This feature is coming soon'),
-                                  ),
-                                );
-                              },
-                              activeColor: AppTheme.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Error message if any
-                      if (_errorMessage.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(16.0),
-                          margin: const EdgeInsets.only(bottom: 24.0),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(12.0),
-                            border: Border.all(color: Colors.red.shade300),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.error_outline, color: Colors.red.shade700),
-                              const SizedBox(width: 12.0),
-                              Expanded(
-                                child: Text(
-                                  _errorMessage,
-                                  style: TextStyle(color: Colors.red.shade700),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      
-                      // Save button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: ElevatedButton(
-                          onPressed: _isSaving ? null : _saveSettings,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryColor,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.0),
-                            ),
-                            elevation: 2,
-                          ),
-                          child: _isSaving
-                              ? Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.0,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    const Text(
-                                      'Saving...',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.save),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Save Settings',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // App Info
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            'EatEase v1.0.0',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-  }
-  
-  Widget _buildSettingsCard({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-    Color iconColor = Colors.blue,
-  }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
-          ...children,
+          
+          // Curved bottom design
+          Container(
+            height: 30,
+            margin: const EdgeInsets.only(top: 20),
+            decoration: BoxDecoration(
+              color: AppTheme.neumorphismBackground,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(30),
+                topRight: Radius.circular(30),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
   
-  Widget _buildSettingsTile({
-    required String title,
-    String? subtitle,
+  // Custom setting option widget for neumorphic design
+  Widget _buildSettingOption({
     required IconData icon,
-    Color iconColor = Colors.grey,
-    Widget? trailing,
-    VoidCallback? onTap,
+    required String title,
+    required VoidCallback onTap,
+    required bool isPressed,
+    String? subtitle,
+    Color? iconColor,
+    Color? textColor,
   }) {
-    return ListTile(
-      leading: Icon(icon, color: iconColor),
-      title: Text(title),
-      subtitle: subtitle != null ? Text(subtitle) : null,
-      trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 16),
-      onTap: onTap,
+    return GestureDetector(
+      onTapDown: (_) {
+        setState(() {
+          // This is handled by the passed isPressed parameter
+        });
+      },
+      onTapUp: (_) {
+        onTap();
+      },
+      onTapCancel: () {
+        setState(() {
+          // This is handled by the passed isPressed parameter
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppTheme.neumorphismBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isPressed 
+                ? AppTheme.merchantPrimaryColor.withOpacity(0.3) 
+                : AppTheme.neumorphismBackground,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon, 
+              color: iconColor ?? AppTheme.merchantPrimaryColor,
+              size: 24,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: textColor ?? Colors.black87,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                                ],
+                              ),
+                            ),
+            const Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Colors.grey,
+                          ),
+                        ],
+                      ),
+      ),
+    );
+  }
+  
+  // Custom neumorphic text field
+  Widget _buildNeumorphicTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? hintText,
+    String? Function(String?)? validator,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+    bool isRequired = false,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: AppTheme.getNeumorphismDecoration(
+        color: AppTheme.neumorphismBackground,
+        borderRadius: 16,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: isRequired ? '$label *' : label,
+          hintText: hintText,
+          prefixIcon: Icon(icon, color: AppTheme.merchantPrimaryColor),
+          border: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
+        ),
+        validator: validator,
+        keyboardType: keyboardType,
+        maxLines: maxLines,
+      ),
+    );
+  }
+  
+  // Custom neumorphic button
+  Widget _buildNeumorphicButton({
+    required String text,
+    required VoidCallback? onPressed,
+    required bool isPressed,
+    required Function(bool) onPressedChange,
+    Color? textColor,
+    Color? backgroundColor,
+    IconData? icon,
+  }) {
+    return GestureDetector(
+      onTapDown: onPressed == null ? null : (_) => onPressedChange(true),
+      onTapUp: onPressed == null ? null : (_) {
+        onPressedChange(false);
+        onPressed();
+      },
+      onTapCancel: onPressed == null ? null : () => onPressedChange(false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+                        width: double.infinity,
+        height: 56,
+        decoration: AppTheme.getNeumorphismDecoration(
+          isPressed: isPressed,
+          color: backgroundColor ?? AppTheme.neumorphismBackground,
+          borderRadius: 16,
+        ),
+        child: Center(
+          child: _isSaving && text.contains('Save')
+              ? SizedBox(
+                  height: 24,
+                  width: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.0,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        textColor ?? AppTheme.merchantPrimaryColor),
+                  ),
+                )
+              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                    if (icon != null) ...[
+                      Icon(
+                        icon,
+                        color: textColor ?? AppTheme.merchantPrimaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      text,
+                      style: AppTheme.buttonText(
+                        color: textColor ?? AppTheme.merchantPrimaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ),
+          );
+  }
+  
+  // Custom neumorphic section
+  Widget _buildNeumorphicSection({
+    required String title,
+    required List<Widget> children,
+    IconData? icon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 8, bottom: 16),
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, color: AppTheme.merchantPrimaryColor, size: 20),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  title,
+                  style: AppTheme.headingSmall(),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            decoration: AppTheme.getNeumorphismDecoration(
+              color: AppTheme.neumorphismBackground,
+              borderRadius: 20,
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
+      ),
     );
   }
 } 

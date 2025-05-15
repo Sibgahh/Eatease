@@ -46,26 +46,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = 'Midtrans Payment Gateway';
   
   // Delivery options
-  final List<String> _deliveryOptions = ['Standard Delivery', 'Express Delivery'];
-  String _selectedDeliveryOption = 'Standard Delivery';
+  final List<String> _deliveryOptions = ['Eat in Place', 'Class Delivery'];
+  String _selectedDeliveryOption = 'Eat in Place';
   
-  // Promo code
+  // Promo code - keeping for compatibility but not showing in UI
   final _promoController = TextEditingController();
   String? _appliedPromo;
   double _promoDiscount = 0.0;
   
   bool _isLoading = false;
+  bool _showAddressField = false;
   
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    // Initialize address field visibility based on delivery option
+    _showAddressField = _selectedDeliveryOption == 'Class Delivery';
   }
   
   @override
   void dispose() {
     _addressController.dispose();
-    _phoneController.dispose();
+    _phoneController.dispose(); // Keep for compatibility
     _noteController.dispose();
     _promoController.dispose();
     super.dispose();
@@ -80,7 +83,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (userData != null) {
           setState(() {
             _addressController.text = userData['address'] ?? '';
-            _phoneController.text = userData['phoneNumber'] ?? '';
+            // Phone number field removed, so no need to set it
           });
         }
       } catch (e) {
@@ -91,43 +94,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   
   // Handle promo code application
   void _applyPromoCode() {
-    final promoCode = _promoController.text.trim();
-    if (promoCode.isEmpty) {
-      return;
-    }
-    
-    // Simple mock promo code validation
-    // In a real app, you would verify this against a database
-    setState(() {
-      if (promoCode.toUpperCase() == 'WELCOME10') {
-        _appliedPromo = 'WELCOME10';
-        _promoDiscount = widget.subtotal * 0.1; // 10% discount
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('10% discount applied'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else if (promoCode.toUpperCase() == 'EATEASE20') {
-        _appliedPromo = 'EATEASE20';
-        _promoDiscount = widget.subtotal * 0.2; // 20% discount
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('20% discount applied'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        _appliedPromo = null;
-        _promoDiscount = 0.0;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid promo code'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    });
+    // Method is kept for compatibility but does nothing since promo UI is removed
+    return;
   }
   
   // Calculate final price after promo discount
@@ -135,20 +103,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   
   // Place order
   Future<void> _placeOrder() async {
-    if (_addressController.text.trim().isEmpty) {
+    // Only validate address for Class Delivery option
+    if (_selectedDeliveryOption == 'Class Delivery' && _addressController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter your delivery address'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    
-    if (_phoneController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your phone number'),
           backgroundColor: Colors.red,
         ),
       );
@@ -191,8 +150,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         status: _selectedPaymentMethod == 'Cash on Delivery' ? 'pending' : 'awaiting_payment',
         paymentStatus: _selectedPaymentMethod == 'Cash on Delivery' ? 'pending' : 'unpaid',
         paymentMethod: _selectedPaymentMethod,
-        deliveryAddress: _addressController.text,
-        customerPhone: _phoneController.text,
+        deliveryAddress: _selectedDeliveryOption == 'Class Delivery' ? _addressController.text : 'Eat in Place',
+        customerPhone: '',  // Empty string since we removed the phone field
         customerNote: _noteController.text,
         deliveryOption: _selectedDeliveryOption,
         promoCode: _appliedPromo,
@@ -265,6 +224,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  // Function to update visibility of address field
+  void _updateAddressFieldVisibility(String? deliveryOption) {
+    if (deliveryOption != null) {
+      setState(() {
+        _selectedDeliveryOption = deliveryOption;
+        _showAddressField = deliveryOption == 'Class Delivery';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -281,38 +250,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Delivery Info Section
-                    _buildSectionTitle('Delivery Information'),
-                    const SizedBox(height: 16),
-                    
-                    // Address
-                    TextField(
-                      controller: _addressController,
-                      decoration: InputDecoration(
-                        labelText: 'Delivery Address',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        prefixIcon: const Icon(Icons.location_on),
-                      ),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Phone Number
-                    TextField(
-                      controller: _phoneController,
-                      decoration: InputDecoration(
-                        labelText: 'Phone Number',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        prefixIcon: const Icon(Icons.phone),
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 16),
-                    
                     // Delivery Options
                     _buildSectionTitle('Delivery Options'),
                     const SizedBox(height: 12),
@@ -321,22 +258,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Column(
                       children: _deliveryOptions.map((option) => RadioListTile<String>(
                         title: Text(option),
-                        subtitle: Text(option == 'Express Delivery' 
-                          ? 'Delivery within 30 minutes' 
-                          : 'Delivery within 60 minutes'),
+                        subtitle: Text(option == 'Class Delivery' 
+                          ? 'Delivered to your classroom' 
+                          : 'Eat at the restaurant'),
                         value: option,
                         groupValue: _selectedDeliveryOption,
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _selectedDeliveryOption = value;
-                            });
-                          }
-                        },
+                        onChanged: _updateAddressFieldVisibility,
                         activeColor: AppTheme.primaryColor,
                       )).toList(),
                     ),
                     const SizedBox(height: 16),
+                    
+                    // Delivery Info Section - Only show when Class Delivery is selected
+                    if (_showAddressField) ...[
+                      _buildSectionTitle('Delivery Information'),
+                      const SizedBox(height: 16),
+                      
+                      // Address
+                      TextField(
+                        controller: _addressController,
+                        decoration: InputDecoration(
+                          labelText: 'Delivery Address',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          prefixIcon: const Icon(Icons.location_on),
+                        ),
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    
+                    // Phone Number field removed
                     
                     // Payment Method
                     _buildSectionTitle('Payment Method'),
@@ -358,49 +311,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         activeColor: AppTheme.primaryColor,
                       )).toList(),
                     ),
-                    const SizedBox(height: 16),
-                    
-                    // Promo Code
-                    _buildSectionTitle('Promo Code'),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _promoController,
-                            decoration: InputDecoration(
-                              labelText: 'Enter Promo Code',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              prefixIcon: const Icon(Icons.discount),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: _applyPromoCode,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text('Apply'),
-                        ),
-                      ],
-                    ),
-                    if (_appliedPromo != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Applied: $_appliedPromo (-Rp ${currencyFormat.format(_promoDiscount.toInt())})',
-                          style: const TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
                     const SizedBox(height: 16),
                     
                     // Additional Notes

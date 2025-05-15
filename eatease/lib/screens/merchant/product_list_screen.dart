@@ -442,7 +442,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 'My Products',
                 style: AppTheme.headingSmall(color: Colors.white),
               ),
-              backgroundColor: AppTheme.primaryColor,
+              backgroundColor: AppTheme.merchantPrimaryColor,
               elevation: 2,
               actions: [
                 IconButton(

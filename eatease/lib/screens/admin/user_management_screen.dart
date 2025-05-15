@@ -151,7 +151,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user.email),
-                    Text('Phone: ${user.phoneNumber}'),
+                    Text(user.role == 'customer' ? 'Student Number: ${user.phoneNumber}' : 'Phone: ${user.phoneNumber}'),
                     Text('Role: ${user.role}', 
                       style: TextStyle(
                         fontWeight: FontWeight.bold,

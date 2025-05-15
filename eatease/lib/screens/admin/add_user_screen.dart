@@ -85,15 +85,17 @@ class _AddUserScreenState extends State<AddUserScreen> {
               
               // Phone Number Field
               TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Phone Number',
+                decoration: InputDecoration(
+                  labelText: _role == 'customer' ? 'Student Number' : 'Phone Number',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.phone),
+                  prefixIcon: Icon(_role == 'customer' ? Icons.school : Icons.phone),
                 ),
                 keyboardType: TextInputType.phone,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter a phone number';
+                    return _role == 'customer' 
+                      ? 'Please enter a student number' 
+                      : 'Please enter a phone number';
                   }
                   return null;
                 },

@@ -1128,26 +1128,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.product == null ? 'Add New Product' : 'Edit Product'),
-        actions: [
-          // Add a check auth button
-          IconButton(
-            icon: const Icon(Icons.security),
-            tooltip: 'Check Auth',
-            onPressed: _checkAuthStatus,
-          ),
-          // Add test storage rules button
-          IconButton(
-            icon: const Icon(Icons.storage),
-            tooltip: 'Test Storage Rules',
-            onPressed: _testStorageRules,
-          ),
-          // Add a diagnostic button
-          IconButton(
-            icon: const Icon(Icons.help_outline),
-            tooltip: 'Run Diagnostics',
-            onPressed: _runDiagnostics,
-          ),
-        ],
+        backgroundColor: AppTheme.merchantPrimaryColor,
       ),
       body: _isLoading
           ? Center(

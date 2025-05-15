@@ -1669,9 +1669,9 @@ class _ProductCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Price
+                        // Price with Rupiah currency
                         Text(
-                          currencyFormat.format(product.price),
+                          'Rp ${currencyFormat.format(product.price)}',
                           style: TextStyle(
                             fontSize: isTablet ? 14 : 12,
                             fontWeight: FontWeight.bold,

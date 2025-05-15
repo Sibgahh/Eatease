@@ -347,11 +347,11 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                   keyboardType: TextInputType.phone,
                                   textInputAction: TextInputAction.next,
                                   decoration: InputDecoration(
-                                    labelText: 'Phone Number',
-                                    hintText: 'Enter your phone number',
+                                    labelText: 'Student Number',
+                                    hintText: 'Enter your student number',
                                     filled: true,
                                     fillColor: Colors.grey.shade100,
-                                    prefixIcon: Icon(Icons.phone_outlined, color: Color(0xFF4CAF50)),
+                                    prefixIcon: Icon(Icons.school_outlined, color: Color(0xFF4CAF50)),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12.0),
                                       borderSide: BorderSide.none,
@@ -368,7 +368,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                   ),
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
-                                      return 'Please enter your phone number';
+                                      return 'Please enter your student number';
                                     }
                                     return null;
                                   },

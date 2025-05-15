@@ -47,11 +47,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   final _chatService = ChatService();
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
-  final _currencyFormat = NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'Rp ',
-    decimalDigits: 0,
-  );
+  final _currencyFormat = NumberFormat("#,###", "id_ID");
   
   String _searchQuery = '';
   String _selectedCategory = 'All';
@@ -782,7 +778,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       children: [
                         // Price
                         Text(
-                          _currencyFormat.format(product.price),
+                          'Rp ${_currencyFormat.format(product.price)}',
                           style: TextStyle(
                             fontSize: isTablet ? 14 : 12,
                             fontWeight: FontWeight.bold,
@@ -924,14 +920,18 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
     double totalPrice = product.price;
     Map<String, String> _selectedOptions = {};
     
-    // Initialize selected options with defaults
-    if (product.customizations != null) {
-      product.customizations!.forEach((category, data) {
-        if (data is Map && data['options'] is List && (data['options'] as List).isNotEmpty) {
-          _selectedOptions[category] = (data['options'] as List).first.toString();
-        }
-      });
-    }
+                                  // Initialize selected options with defaults
+                              if (product.customizations != null) {
+                                product.customizations!.forEach((category, data) {
+                                  if (data is Map && data['options'] is List && (data['options'] as List).isNotEmpty) {
+                                    // Only pre-select for required customizations, leave optional ones unselected
+                                    if (data['isRequired'] == true) {
+                                      _selectedOptions[category] = (data['options'] as List).first.toString();
+                                    }
+                                    // Optional customizations start unselected
+                                  }
+                                });
+                              }
     
     showModalBottomSheet(
       context: context,
@@ -948,7 +948,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               // Add customization prices
               double customizationsPrice = 0;
               if (product.customizations != null) {
-                _selectedOptions.forEach((category, option) {
+                _selectedOptions.forEach((category, optionValue) {
                   if (product.customizations!.containsKey(category)) {
                     final categoryData = product.customizations![category];
                     if (categoryData is Map && 
@@ -958,9 +958,24 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       final options = categoryData['options'] as List;
                       final prices = categoryData['prices'] as List;
                       
-                      final index = options.indexOf(option);
-                      if (index >= 0 && index < prices.length && prices[index] is num) {
-                        customizationsPrice += (prices[index] as num).toDouble();
+                      // Check if this is a required field with single selection or optional with multiple selections
+                      final bool isRequired = categoryData['isRequired'] == true;
+                      
+                      if (isRequired) {
+                        // Single selection - find the exact option
+                        final index = options.indexOf(optionValue);
+                        if (index >= 0 && index < prices.length && prices[index] is num) {
+                          customizationsPrice += (prices[index] as num).toDouble();
+                        }
+                      } else {
+                        // Multiple selections - split by comma and add each selected option's price
+                        final selectedOptions = optionValue.split(',');
+                        for (final selectedOption in selectedOptions) {
+                          final index = options.indexOf(selectedOption);
+                          if (index >= 0 && index < prices.length && prices[index] is num) {
+                            customizationsPrice += (prices[index] as num).toDouble();
+                          }
+                        }
                       }
                     }
                   }
@@ -973,11 +988,27 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               });
             }
             
+            // Call updateTotalPrice once to initialize correct price
+            _updateTotalPrice();
+            
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              decoration: BoxDecoration(
+                color: AppTheme.neumorphismBackground,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, -3),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.8),
+                    blurRadius: 10,
+                    spreadRadius: -5,
+                    offset: const Offset(0, -3),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1035,80 +1066,198 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Product name and price
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  product.name,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
+                          // Product details card with neumorphic design
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neumorphismBackground,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                               BoxShadow(
+                                 color: Colors.white.withOpacity(0.8),
+                                 offset: const Offset(-3, -3),
+                                 blurRadius: 6,
+                               ),
+                               BoxShadow(
+                                 color: Colors.black.withOpacity(0.1),
+                                 offset: const Offset(3, 3),
+                                 blurRadius: 6,
+                               ),
+                             ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Product name and price 
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        product.name,
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.white.withOpacity(0.5),
+                                            offset: const Offset(-1, -1),
+                                            blurRadius: 4,
+                                          ),
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            offset: const Offset(1, 1),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        'Rp ${_currencyFormat.format(product.price)}',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                
+                                const SizedBox(height: 12),
+                                
+                                // Category chip with neumorphic design
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isTablet ? 12 : 8, 
+                                    vertical: isTablet ? 6 : 4
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.neumorphismBackground,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.white.withOpacity(0.8),
+                                        offset: const Offset(-1, -1),
+                                        blurRadius: 4,
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        offset: const Offset(1, 1),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                    border: Border.all(
+                                      color: _getCategoryColor(product.category).withOpacity(0.3),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.restaurant,
+                                        size: 14,
+                                        color: _getCategoryColor(product.category),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        product.category,
+                                        style: TextStyle(
+                                          fontSize: isTablet ? 12 : 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: _getCategoryColor(product.category),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                              Text(
-                                _currencyFormat.format(product.price),
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primaryColor,
+                                
+                                const SizedBox(height: 16),
+                                
+                                // Description with neumorphic inset effect
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.neumorphismBackground,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        offset: const Offset(-1, -1),
+                                        blurRadius: 2,
+                                        spreadRadius: 1,
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.white.withOpacity(0.7),
+                                        offset: const Offset(1, 1),
+                                        blurRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    product.description,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                      height: 1.5,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          
-                          const SizedBox(height: 8),
-                          
-                          // Category chip
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: isTablet ? 8 : 6, 
-                              vertical: isTablet ? 3 : 2
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getCategoryColor(product.category).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _getCategoryColor(product.category).withOpacity(0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              product.category,
-                              style: TextStyle(
-                                fontSize: isTablet ? 11 : 9,
-                                fontWeight: FontWeight.w500,
-                                color: _getCategoryColor(product.category),
-                              ),
-                            ),
-                          ),
-                          
-                          const SizedBox(height: 16),
-                          
-                          // Description
-                          Text(
-                            product.description,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
+                              ],
                             ),
                           ),
                           
                           const SizedBox(height: 24),
                           
-                          // Customizations section
+                                                    // Customizations section
                           if (product.customizations != null && product.customizations!.isNotEmpty) ...[
-                            const Text(
-                              'Customizations',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.neumorphismBackground,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.white.withOpacity(0.8),
+                                    offset: const Offset(-2, -2),
+                                    blurRadius: 5,
+                                  ),
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    offset: const Offset(2, 2),
+                                    blurRadius: 5,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.tune_rounded,
+                                    color: AppTheme.primaryColor,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Customize Your Order',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 16),
                           
                             // Display customization categories
                             ...product.customizations!.entries.map((entry) {
@@ -1126,69 +1275,162 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                               final options = categoryData['options'] as List;
                               final prices = categoryData['prices'] as List? ?? [];
                               
+                              // Get isRequired property
+                              final bool isRequired = categoryData['isRequired'] == true;
+                              
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey.shade200),
+                                  color: AppTheme.neumorphismBackground,
                                   borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.white.withOpacity(0.8),
+                                      offset: const Offset(-2, -2),
+                                      blurRadius: 5,
+                                    ),
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      offset: const Offset(2, 2),
+                                      blurRadius: 5,
+                                    ),
+                                  ],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Category name
+                                    // Category name with required indicator if needed
                                     Padding(
                                       padding: const EdgeInsets.all(12),
-                                      child: Text(
-                                        categoryName,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            categoryName,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          if (isRequired)
+                                            Container(
+                                              margin: const EdgeInsets.only(left: 8),
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red.shade50,
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: Colors.red.shade200),
+                                              ),
+                                              child: const Text(
+                                                'Required',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.red,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                     const Divider(height: 1),
-                                    // Options list
-                                    ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: options.length,
-                                      itemBuilder: (context, index) {
-                                        final option = options[index].toString();
-                                        final price = index < prices.length && prices[index] is num
-                                            ? (prices[index] as num).toDouble()
-                                            : 0.0;
-                                        final isSelected = _selectedOptions[categoryName] == option;
-                                        
-                                        return RadioListTile<String>(
-                                          title: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(option),
-                                              if (price > 0)
-                                                Text(
-                                                  '+${_currencyFormat.format(price)}',
-                                                  style: TextStyle(
-                                                    color: AppTheme.primaryColor,
-                                                    fontWeight: FontWeight.w500,
+                                    // Options list with checkboxes instead of radio buttons
+                                    Column(
+                                      children: [
+                                        // Regular options
+                                        ListView.builder(
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: options.length,
+                                          itemBuilder: (context, index) {
+                                            final option = options[index].toString();
+                                            final price = index < prices.length && prices[index] is num
+                                                ? (prices[index] as num).toDouble()
+                                                : 0.0;
+                                            
+                                            // For required customizations, we track which option is selected
+                                            // For optional ones, we track which options are checked (could be multiple)
+                                            bool isSelected = false;
+                                            if (isRequired) {
+                                              // For required fields, only one option can be selected
+                                              isSelected = _selectedOptions[categoryName] == option;
+                                            } else {
+                                              // For optional fields, check if this option is in the selected list
+                                              final selectedList = _selectedOptions[categoryName]?.split(',') ?? [];
+                                              isSelected = selectedList.contains(option);
+                                            }
+                                            
+                                            return CheckboxListTile(
+                                              title: Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      option,
+                                                      style: const TextStyle(fontSize: 14),
+                                                    ),
                                                   ),
-                                                ),
-                                            ],
-                                          ),
-                                          value: option,
-                                          groupValue: _selectedOptions[categoryName],
-                                          onChanged: (value) {
-                                            setModalState(() {
-                                              if (value != null) {
-                                                _selectedOptions[categoryName] = value;
-                                                _updateTotalPrice();
-                                              }
-                                            });
+                                                  if (price > 0)
+                                                    Text(
+                                                      '+Rp ${_currencyFormat.format(price)}',
+                                                      style: TextStyle(
+                                                        color: AppTheme.primaryColor,
+                                                        fontWeight: FontWeight.w500,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                              value: isSelected,
+                                              onChanged: (bool? value) {
+                                                setModalState(() {
+                                                  if (value == true) {
+                                                    // Checkbox is checked
+                                                    if (isRequired) {
+                                                      // For required fields, replace the selection
+                                                      _selectedOptions[categoryName] = option;
+                                                    } else {
+                                                      // For optional fields, add to the selection list
+                                                      final selectedList = _selectedOptions[categoryName]?.split(',') ?? [];
+                                                      if (!selectedList.contains(option)) {
+                                                        selectedList.add(option);
+                                                        _selectedOptions[categoryName] = selectedList.join(',');
+                                                      }
+                                                    }
+                                                  } else {
+                                                    // Checkbox is unchecked
+                                                    if (isRequired) {
+                                                      // For required fields, don't allow unchecking if it's the only one checked
+                                                      if (_selectedOptions[categoryName] == option) {
+                                                        // Don't allow unchecking the only selected option for required fields
+                                                        // We could show a message here if needed
+                                                        return;
+                                                      }
+                                                    } else {
+                                                      // For optional fields, remove from the selection list
+                                                      final selectedList = _selectedOptions[categoryName]?.split(',') ?? [];
+                                                      selectedList.remove(option);
+                                                      
+                                                      if (selectedList.isEmpty) {
+                                                        // If no options left, remove the category entirely
+                                                        _selectedOptions.remove(categoryName);
+                                                      } else {
+                                                        // Otherwise update with remaining selections
+                                                        _selectedOptions[categoryName] = selectedList.join(',');
+                                                      }
+                                                    }
+                                                  }
+                                                  _updateTotalPrice();
+                                                });
+                                              },
+                                              activeColor: AppTheme.primaryColor,
+                                              checkColor: Colors.white,
+                                              contentPadding: EdgeInsets.zero,
+                                              controlAffinity: ListTileControlAffinity.leading,
+                                              dense: true,
+                                            );
                                           },
-                                          activeColor: AppTheme.primaryColor,
-                                          contentPadding: EdgeInsets.zero,
-                                          dense: true,
-                                        );
-                                      },
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1196,31 +1438,88 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                             }).toList(),
                           ],
                           
-                          // Special instructions
-                          const Text(
-                            'Special Instructions',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          // Special instructions with neumorphic design
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neumorphismBackground,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withOpacity(0.8),
+                                  offset: const Offset(-2, -2),
+                                  blurRadius: 5,
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  offset: const Offset(2, 2),
+                                  blurRadius: 5,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.notes_rounded,
+                                  color: AppTheme.primaryColor,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Special Instructions',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 8),
-                          TextField(
-                            decoration: InputDecoration(
-                              hintText: 'E.g., No onions, less spicy, etc.',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: AppTheme.primaryColor),
-                              ),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppTheme.neumorphismBackground,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  offset: const Offset(2, 2),
+                                  blurRadius: 4,
+                                  spreadRadius: 0,
+                                ),
+                                BoxShadow(
+                                  color: Colors.white.withOpacity(0.9),
+                                  offset: const Offset(-2, -2),
+                                  blurRadius: 4,
+                                  spreadRadius: 0,
+                                ),
+                              ],
                             ),
-                            maxLines: 2,
-                            onChanged: (value) {
-                              specialInstructions = value;
-                            },
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'E.g., No onions, less spicy, etc.',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: AppTheme.primaryColor.withOpacity(0.3)),
+                                ),
+                                enabledBorder: const OutlineInputBorder(
+                                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                filled: true,
+                                fillColor: AppTheme.neumorphismBackground,
+                              ),
+                              maxLines: 2,
+                              onChanged: (value) {
+                                specialInstructions = value;
+                              },
+                            ),
                           ),
                           const SizedBox(height: 24),
                         ],
@@ -1228,26 +1527,43 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     ),
                   ),
                   
-                  // Bottom bar with quantity selector and add button
+                  // Bottom bar with quantity selector and add button with neumorphic design
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppTheme.neumorphismBackground,
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.05),
                           blurRadius: 10,
                           offset: const Offset(0, -5),
                         ),
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.8),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
                       ],
                     ),
                     child: Row(
                       children: [
-                        // Quantity selector
+                        // Quantity selector with neumorphic design
                         Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
+                            color: AppTheme.neumorphismBackground,
                             borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.white.withOpacity(0.8),
+                                offset: const Offset(-2, -2),
+                                blurRadius: 5,
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                offset: const Offset(2, 2),
+                                blurRadius: 5,
+                              ),
+                            ],
                           ),
                           child: Row(
                             children: [
@@ -1307,36 +1623,90 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        // Add to cart button
+                        // Add to cart button with neumorphic design
                         Expanded(
-                          child: ElevatedButton(
-                            onPressed: widget.isOpen ? () {
-                              // Add item to cart
-                              _addToCart(
-                                product, 
-                                quantity: quantity,
-                                selectedOptions: _selectedOptions.values.toList(),
-                                specialInstructions: specialInstructions?.isNotEmpty == true ? specialInstructions : null,
-                                totalPrice: totalPrice,
-                              );
-                              Navigator.pop(context);
-                            } : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryColor,
-                              disabledBackgroundColor: Colors.grey.shade400,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            decoration: widget.isOpen ? BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withOpacity(0.8),
+                                  offset: const Offset(-2, -2),
+                                  blurRadius: 5,
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  offset: const Offset(2, 2),
+                                  blurRadius: 5,
+                                ),
+                              ],
+                            ) : null,
+                            child: ElevatedButton(
+                              onPressed: widget.isOpen ? () {
+                                // Check if all required customizations are selected
+                                bool missingRequiredCustomization = false;
+                                String missingCategory = "";
+                                
+                                if (product.customizations != null) {
+                                  for (var entry in product.customizations!.entries) {
+                                    final categoryName = entry.key;
+                                    final categoryData = entry.value;
+                                    
+                                    // Check if this category is required
+                                    if (categoryData is Map && 
+                                        categoryData['isRequired'] == true && 
+                                        !_selectedOptions.containsKey(categoryName)) {
+                                      missingRequiredCustomization = true;
+                                      missingCategory = categoryName;
+                                      break;
+                                    }
+                                  }
+                                }
+                                
+                                if (missingRequiredCustomization) {
+                                  // Show error message for required customization
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Please select an option for $missingCategory'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                  return;
+                                }
+                                
+                                // Prepare selected options (converting Map to List)
+                                List<String> selectedOptionsList = [];
+                                _selectedOptions.forEach((category, option) {
+                                  selectedOptionsList.add("$category: $option");
+                                });
+                                
+                                // Add item to cart
+                                _addToCart(
+                                  product, 
+                                  quantity: quantity,
+                                  selectedOptions: selectedOptionsList,
+                                  specialInstructions: specialInstructions?.isNotEmpty == true ? specialInstructions : null,
+                                  totalPrice: totalPrice,
+                                );
+                                Navigator.pop(context);
+                              } : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                disabledBackgroundColor: Colors.grey.shade400,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              widget.isOpen
-                                ? 'Add to Cart - ${_currencyFormat.format(totalPrice)}'
-                                : 'Store Closed',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                              child: Text(
+                                widget.isOpen
+                                  ? 'Add to Cart - Rp ${_currencyFormat.format(totalPrice)}'
+                                  : 'Store Closed',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
