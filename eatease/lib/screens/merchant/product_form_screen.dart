@@ -12,6 +12,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 // Class to manage product customization groups
 class CustomizationGroup {
@@ -87,6 +89,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   @override
   void initState() {
     super.initState();
+    // Clear image collections on initialization
+    _existingImageUrls.clear();
+    _newImageFiles.clear();
+    _previewImageUrl = null;
+    _previewError = false;
+    
     if (widget.product != null) {
       // Editing existing product
       _nameController.text = widget.product!.name;
@@ -389,6 +397,21 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
   
+  // Add a method to clear image cache
+  Future<void> _clearImageCache() async {
+    // Clear all cached images
+    await DefaultCacheManager().emptyCache();
+    
+    // Clear image provider cache
+    imageCache.clear();
+    imageCache.clearLiveImages();
+    
+    // Also try to clear specific image URLs
+    for (String url in _existingImageUrls) {
+      await DefaultCacheManager().removeFile(url);
+    }
+  }
+  
   // Continue with product save after images are processed
   Future<void> _continueProductSave(List<String> imageUrls) async {
     try {
@@ -425,7 +448,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           );
 
           await _productService.addProduct(newProduct);
+          
+          // Clear image cache
+          await _clearImageCache();
+          
           if (mounted) {
+            // Clear the image collections
+            setState(() {
+              _existingImageUrls.clear();
+              _newImageFiles.clear();
+              _previewImageUrl = null;
+              _previewError = false;
+            });
+            
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Product added successfully'),
@@ -457,7 +492,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           );
 
           await _productService.updateProduct(widget.product!.id, updatedProduct);
+          
+          // Clear image cache
+          await _clearImageCache();
+          
           if (mounted) {
+            // Clear the image collections
+            setState(() {
+              _existingImageUrls.clear();
+              _newImageFiles.clear();
+              _previewImageUrl = null;
+              _previewError = false;
+            });
+            
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Product updated successfully'),
@@ -1418,12 +1465,21 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           )
                         : ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              _previewImageUrl!,
+                            child: CachedNetworkImage(
+                              imageUrl: _previewImageUrl!,
                               fit: BoxFit.cover,
                               height: 200,
                               width: double.infinity,
-                              errorBuilder: (context, error, stackTrace) {
+                              cacheKey: '${_previewImageUrl}_${DateTime.now().millisecondsSinceEpoch}',
+                              placeholderFadeInDuration: const Duration(milliseconds: 300),
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) {
+                                // Update error state
                                 Future.microtask(() {
                                   setState(() {
                                     _previewError = true;
@@ -1458,105 +1514,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         ),
       ],
     );
-  }
-
-  void _addImageUrl() {
-    final url = _imageUrlController.text.trim();
-    
-    // Check if URL is not empty
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter an image URL')),
-      );
-      return;
-    }
-    
-    // Basic URL validation
-    bool isValidUrl = Uri.tryParse(url)?.hasAbsolutePath ?? false;
-    if (!isValidUrl) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid URL')),
-      );
-      return;
-    }
-    
-    // Check for common image extensions
-    final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
-    bool hasImageExtension = imageExtensions.any((ext) => url.toLowerCase().endsWith(ext));
-    
-    if (!hasImageExtension && !url.contains('image')) {
-      // Show confirmation dialog if URL doesn't seem to be an image
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Confirm Image URL'),
-          content: const Text(
-            'The URL you entered does not appear to be a direct image link. '
-            'Are you sure this is a valid image URL?'
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _confirmAddImageUrl(url);
-              },
-              child: const Text('Add Anyway'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      _confirmAddImageUrl(url);
-    }
-  }
-  
-  void _confirmAddImageUrl(String url) {
-    setState(() {
-      _existingImageUrls.add(url);
-      _imageUrlController.clear();
-      _isAddingImageUrl = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Image URL added'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-  }
-
-  void _toggleAddImageUrl() {
-    setState(() {
-      _isAddingImageUrl = !_isAddingImageUrl;
-      if (!_isAddingImageUrl) {
-        _imageUrlController.clear();
-        _previewImageUrl = null;
-        _previewError = false;
-      }
-    });
-  }
-
-  void _loadImagePreview() {
-    final url = _imageUrlController.text.trim();
-    
-    // Check if URL is not empty and valid
-    if (url.isEmpty || !(Uri.tryParse(url)?.hasAbsolutePath ?? false)) {
-      setState(() {
-        _previewImageUrl = null;
-        _previewError = false;
-      });
-      return;
-    }
-    
-    setState(() {
-      _isLoadingPreview = true;
-      _previewError = false;
-      _previewImageUrl = url;
-    });
   }
 
   @override
@@ -1709,17 +1666,23 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      _existingImageUrls[i],
+                                    child: CachedNetworkImage(
+                                      imageUrl: _existingImageUrls[i],
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(
-                                          color: Colors.grey.shade200,
-                                          child: const Center(
-                                            child: Icon(Icons.error_outline, color: Colors.red, size: 32),
-                                          ),
-                                        );
-                                      },
+                                      cacheKey: '${_existingImageUrls[i]}_${DateTime.now().millisecondsSinceEpoch}',
+                                      placeholderFadeInDuration: const Duration(milliseconds: 300),
+                                      placeholder: (context, url) => Container(
+                                        color: Colors.grey.shade200,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) => Container(
+                                        color: Colors.grey.shade200,
+                                        child: const Center(
+                                          child: Icon(Icons.error_outline, color: Colors.red, size: 32),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
