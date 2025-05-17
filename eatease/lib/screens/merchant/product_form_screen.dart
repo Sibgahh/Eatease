@@ -44,12 +44,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
   final _imageUrlController = TextEditingController();
-<<<<<<< Updated upstream
   // Removing preparation time controller
   // final _prepTimeController = TextEditingController();
-=======
-  ProductModel? _currentProduct;
->>>>>>> Stashed changes
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -122,12 +118,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-<<<<<<< Updated upstream
     // Removing preparation time disposal
     // _prepTimeController.dispose();
-=======
-    _imageUrlController.dispose();
->>>>>>> Stashed changes
     super.dispose();
   }
 
@@ -251,14 +243,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     });
 
     try {
-      // Debug print to check image URLs
-      print('Existing image URLs before save: $_existingImageUrls');
-      
       // Upload any new images
       final List<String> allImageUrls = [..._existingImageUrls];
-      
-      // Debug printout to verify URLs are retained
-      print('All image URLs before upload: $allImageUrls');
       
       if (_newImageFiles.isNotEmpty) {
         // First try the diagnostics to see if Firebase Storage is working
@@ -406,9 +392,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   // Continue with product save after images are processed
   Future<void> _continueProductSave(List<String> imageUrls) async {
     try {
-      // Debug print to verify we have all images including URLs
-      print('Image URLs to save: $imageUrls');
-      
       double price = 0;
       
       try {
@@ -428,27 +411,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       if (widget.product == null) {
         // Create new product
         try {
-          // Make sure we have at least an empty list for images
-          final List<String> finalImageUrls = imageUrls.isEmpty 
-              ? [] 
-              : imageUrls;
-          
           final newProduct = ProductModel(
             id: const Uuid().v4(), // Will be replaced by Firestore
             merchantId: _productService.currentMerchantId ?? '',
             name: _nameController.text.trim(),
             description: _descriptionController.text.trim(),
             price: price,
-            imageUrls: finalImageUrls,
+            imageUrls: imageUrls,
             isAvailable: _isAvailable,
             category: _category,
             customizations: customizations.isNotEmpty ? customizations : null,
             createdAt: DateTime.now(),
           );
-          
-          // Debug print product before saving
-          print('New product to save: ${newProduct.toString()}');
-          print('Image URLs in new product: ${newProduct.imageUrls}');
 
           await _productService.addProduct(newProduct);
           if (mounted) {
@@ -471,25 +445,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       } else {
         // Update existing product
         try {
-          // Make sure we have at least an empty list for images
-          final List<String> finalImageUrls = imageUrls.isEmpty 
-              ? [] 
-              : imageUrls;
-          
           final updatedProduct = widget.product!.copyWith(
             name: _nameController.text.trim(),
             description: _descriptionController.text.trim(),
             price: price,
-            imageUrls: finalImageUrls,
+            imageUrls: imageUrls,
             isAvailable: _isAvailable,
             category: _category,
             customizations: customizations.isNotEmpty ? customizations : null,
             updatedAt: DateTime.now(),
           );
-          
-          // Debug print product before saving
-          print('Updated product to save: ${updatedProduct.toString()}');
-          print('Image URLs in updated product: ${updatedProduct.imageUrls}');
 
           await _productService.updateProduct(widget.product!.id, updatedProduct);
           if (mounted) {
@@ -1251,32 +1216,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
   
   void _confirmAddImageUrl(String url) {
-    // Debug print before adding URL
-    print('Adding image URL to _existingImageUrls: $url');
-    print('Current _existingImageUrls before adding: $_existingImageUrls');
-    
     setState(() {
-      // Make sure we're adding to the existing URLs list
-      if (_existingImageUrls.contains(url)) {
-        // Don't add duplicates
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This image URL is already added'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-      
       _existingImageUrls.add(url);
       _imageUrlController.clear();
       _isAddingImageUrl = false;
       _previewImageUrl = null;
       _previewError = false;
     });
-
-    // Debug print after adding URL
-    print('Updated _existingImageUrls after adding: $_existingImageUrls');
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1358,34 +1304,21 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _previewImageUrl = url;
     });
     
-    // Create a temporary Image widget to test loading
-    final testImage = Image.network(
-      url,
-      key: UniqueKey(),
-    );
-    
-    final imageStream = testImage.image.resolve(const ImageConfiguration());
-    
-    // Listen to the image stream to detect loading success/failure
-    imageStream.addListener(ImageStreamListener(
-      (ImageInfo info, bool synchronousCall) {
-        if (mounted) {
-          setState(() {
-            _isLoadingPreview = false;
-            _previewError = false;
-          });
-        }
-      },
-      onError: (dynamic exception, StackTrace? stackTrace) {
-        if (mounted) {
-          setState(() {
-            _isLoadingPreview = false;
-            _previewError = true;
-          });
-          print('Error loading image preview: $exception');
-        }
-      },
-    ));
+    // Use a simple delay to simulate loading and check if the URL seems to be an image
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      
+      // Simple check for common image extensions
+      final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+      bool hasImageExtension = imageExtensions.any((ext) => url.toLowerCase().endsWith(ext));
+      
+      // If URL doesn't have an image extension, we'll still try to load it
+      // The Image.network widget's errorBuilder will handle actual loading errors
+      
+      setState(() {
+        _isLoadingPreview = false;
+      });
+    });
   }
 
   // Build the URL input section for adding an image by URL
@@ -1527,105 +1460,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
-  void _addImageUrl() {
-    final url = _imageUrlController.text.trim();
-    
-    // Check if URL is not empty
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter an image URL')),
-      );
-      return;
-    }
-    
-    // Basic URL validation
-    bool isValidUrl = Uri.tryParse(url)?.hasAbsolutePath ?? false;
-    if (!isValidUrl) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid URL')),
-      );
-      return;
-    }
-    
-    // Check for common image extensions
-    final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
-    bool hasImageExtension = imageExtensions.any((ext) => url.toLowerCase().endsWith(ext));
-    
-    if (!hasImageExtension && !url.contains('image')) {
-      // Show confirmation dialog if URL doesn't seem to be an image
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Confirm Image URL'),
-          content: const Text(
-            'The URL you entered does not appear to be a direct image link. '
-            'Are you sure this is a valid image URL?'
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _confirmAddImageUrl(url);
-              },
-              child: const Text('Add Anyway'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      _confirmAddImageUrl(url);
-    }
-  }
-  
-  void _confirmAddImageUrl(String url) {
-    setState(() {
-      _existingImageUrls.add(url);
-      _imageUrlController.clear();
-      _isAddingImageUrl = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Image URL added'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-  }
-
-  void _toggleAddImageUrl() {
-    setState(() {
-      _isAddingImageUrl = !_isAddingImageUrl;
-      if (!_isAddingImageUrl) {
-        _imageUrlController.clear();
-        _previewImageUrl = null;
-        _previewError = false;
-      }
-    });
-  }
-
-  void _loadImagePreview() {
-    final url = _imageUrlController.text.trim();
-    
-    // Check if URL is not empty and valid
-    if (url.isEmpty || !(Uri.tryParse(url)?.hasAbsolutePath ?? false)) {
-      setState(() {
-        _previewImageUrl = null;
-        _previewError = false;
-      });
-      return;
-    }
-    
-    setState(() {
-      _isLoadingPreview = true;
-      _previewError = false;
-      _previewImageUrl = url;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1735,10 +1569,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           
-<<<<<<< Updated upstream
                           // Add from URL button
-=======
->>>>>>> Stashed changes
                           InkWell(
                             onTap: _toggleAddImageUrl,
                             child: Container(
@@ -1758,11 +1589,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-<<<<<<< Updated upstream
                                     'Add from URL',
-=======
-                                    'Add URL',
->>>>>>> Stashed changes
                                     style: AppTheme.bodyMedium(color: AppTheme.primaryColor),
                                   ),
                                 ],
@@ -1770,10 +1597,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           
-<<<<<<< Updated upstream
                           // Existing images
-=======
->>>>>>> Stashed changes
                           for (int i = 0; i < _existingImageUrls.length; i++)
                             Stack(
                               children: [
@@ -1855,7 +1679,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     const SizedBox(height: 16),
                     
                     if (_isAddingImageUrl)
-<<<<<<< Updated upstream
                       Card(
                         elevation: 2,
                         margin: const EdgeInsets.only(bottom: 16),
@@ -1867,9 +1690,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           child: _buildUrlInputSection(),
                         ),
                       ),
-=======
-                      _buildUrlInputSection(),
->>>>>>> Stashed changes
                     
                     const SizedBox(height: 24),
                     
@@ -2068,7 +1888,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
-<<<<<<< Updated upstream
   // Add a method to run diagnostics
   Future<void> _runDiagnostics() async {
     setState(() {
@@ -2224,87 +2043,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         child: CircularProgressIndicator(
                           value: loadingProgress.expectedTotalBytes != null
                               ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-=======
-  Widget _buildUrlInputSection() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Enter image URL',
-            style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _imageUrlController,
-                  decoration: const InputDecoration(
-                    hintText: 'https://example.com/image.jpg',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  keyboardType: TextInputType.url,
-                  onChanged: (_) => _loadImagePreview(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _addImageUrl,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Add'),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: _toggleAddImageUrl,
-              ),
-            ],
-          ),
-          
-          if (_previewImageUrl != null) ...[
-            const SizedBox(height: 16),
-            Center(
-              child: Container(
-                width: 200,
-                height: 150,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    _previewImageUrl!,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) {
-                        // Image has loaded successfully
-                        return child;
-                      }
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded / 
-                                  (loadingProgress.expectedTotalBytes ?? 1)
->>>>>>> Stashed changes
                               : null,
                         ),
                       );
                     },
                     errorBuilder: (context, error, stackTrace) {
-<<<<<<< Updated upstream
                       return const Center(
                         child: Text('Error loading image'),
                       );
@@ -2340,29 +2083,5 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _isLoading = false;
       });
     }
-=======
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.red, size: 32),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Invalid image URL',
-                              style: AppTheme.bodySmall(color: Colors.red),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
->>>>>>> Stashed changes
   }
 } 
