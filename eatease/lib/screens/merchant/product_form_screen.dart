@@ -1460,6 +1460,105 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
+  void _addImageUrl() {
+    final url = _imageUrlController.text.trim();
+    
+    // Check if URL is not empty
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an image URL')),
+      );
+      return;
+    }
+    
+    // Basic URL validation
+    bool isValidUrl = Uri.tryParse(url)?.hasAbsolutePath ?? false;
+    if (!isValidUrl) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid URL')),
+      );
+      return;
+    }
+    
+    // Check for common image extensions
+    final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+    bool hasImageExtension = imageExtensions.any((ext) => url.toLowerCase().endsWith(ext));
+    
+    if (!hasImageExtension && !url.contains('image')) {
+      // Show confirmation dialog if URL doesn't seem to be an image
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirm Image URL'),
+          content: const Text(
+            'The URL you entered does not appear to be a direct image link. '
+            'Are you sure this is a valid image URL?'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _confirmAddImageUrl(url);
+              },
+              child: const Text('Add Anyway'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _confirmAddImageUrl(url);
+    }
+  }
+  
+  void _confirmAddImageUrl(String url) {
+    setState(() {
+      _existingImageUrls.add(url);
+      _imageUrlController.clear();
+      _isAddingImageUrl = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Image URL added'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _toggleAddImageUrl() {
+    setState(() {
+      _isAddingImageUrl = !_isAddingImageUrl;
+      if (!_isAddingImageUrl) {
+        _imageUrlController.clear();
+        _previewImageUrl = null;
+        _previewError = false;
+      }
+    });
+  }
+
+  void _loadImagePreview() {
+    final url = _imageUrlController.text.trim();
+    
+    // Check if URL is not empty and valid
+    if (url.isEmpty || !(Uri.tryParse(url)?.hasAbsolutePath ?? false)) {
+      setState(() {
+        _previewImageUrl = null;
+        _previewError = false;
+      });
+      return;
+    }
+    
+    setState(() {
+      _isLoadingPreview = true;
+      _previewError = false;
+      _previewImageUrl = url;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
