@@ -69,6 +69,8 @@ class OrderModel {
   final DateTime updatedAt;
   final DateTime? completedAt;
   final String? merchantNote;
+  final double? rating;
+  final String? review;
 
   OrderModel({
     required this.id,
@@ -93,6 +95,8 @@ class OrderModel {
     required this.updatedAt,
     this.completedAt,
     this.merchantNote,
+    this.rating,
+    this.review,
   });
 
   Map<String, dynamic> toMap() {
@@ -118,6 +122,8 @@ class OrderModel {
       'updatedAt': Timestamp.fromDate(updatedAt),
       'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
       'merchantNote': merchantNote,
+      'rating': rating,
+      'review': review,
     };
   }
 
@@ -148,6 +154,8 @@ class OrderModel {
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       completedAt: (map['completedAt'] as Timestamp?)?.toDate(),
       merchantNote: map['merchantNote'],
+      rating: (map['rating'] as num?)?.toDouble(),
+      review: map['review'],
     );
   }
 
@@ -174,6 +182,8 @@ class OrderModel {
     DateTime? updatedAt,
     DateTime? completedAt,
     String? merchantNote,
+    double? rating,
+    String? review,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -198,6 +208,8 @@ class OrderModel {
       updatedAt: updatedAt ?? this.updatedAt,
       completedAt: completedAt ?? this.completedAt,
       merchantNote: merchantNote ?? this.merchantNote,
+      rating: rating ?? this.rating,
+      review: review ?? this.review,
     );
   }
 } 

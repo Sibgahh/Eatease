@@ -384,6 +384,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
   void _showOrderDetails(OrderModel order) {
     final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     final bool isActiveOrder = ['pending', 'preparing', 'ready'].contains(order.status.toLowerCase());
+    final bool isCompletedOrder = order.status.toLowerCase() == 'completed';
     
     showModalBottomSheet(
       context: context,
@@ -454,6 +455,149 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> with Single
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Rating section for completed orders
+                  if (isCompletedOrder) ...[
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Rate Your Order',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (order.rating != null) ...[
+                      // Show existing rating
+                      Row(
+                        children: [
+                          ...List.generate(5, (index) {
+                            return Icon(
+                              index < order.rating!.floor()
+                                  ? Icons.star
+                                  : (index < order.rating!.ceil() && index >= order.rating!.floor())
+                                      ? Icons.star_half
+                                      : Icons.star_border,
+                              color: Colors.amber,
+                              size: 24,
+                            );
+                          }),
+                          const SizedBox(width: 8),
+                          Text(
+                            order.rating!.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (order.review != null && order.review!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            order.review!,
+                            style: const TextStyle(
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ] else ...[
+                      // Show rating input
+                      Builder(
+                        builder: (context) {
+                          double rating = 0;
+                          final reviewController = TextEditingController();
+                          
+                          return StatefulBuilder(
+                            builder: (context, setState) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: List.generate(5, (index) {
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            rating = index + 1.0;
+                                          });
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                                          child: Icon(
+                                            index < rating ? Icons.star : Icons.star_border,
+                                            color: Colors.amber,
+                                            size: 32,
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TextField(
+                                    controller: reviewController,
+                                    maxLines: 3,
+                                    decoration: InputDecoration(
+                                      hintText: 'Write your review (optional)',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: rating > 0
+                                          ? () async {
+                                              try {
+                                                await _orderService.updateOrderRating(
+                                                  order.id,
+                                                  rating,
+                                                  reviewController.text.trim(),
+                                                );
+                                                if (!mounted) return;
+                                                Navigator.pop(context);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('Thank you for your rating!'),
+                                                  ),
+                                                );
+                                              } catch (e) {
+                                                if (!mounted) return;
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Error submitting rating: $e'),
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          : null,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppTheme.primaryColor,
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                      ),
+                                      child: const Text('Submit Rating'),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 16),
                   ],
                   

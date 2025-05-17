@@ -16,6 +16,8 @@ class NoConnectionScreen extends StatefulWidget {
 
 class _NoConnectionScreenState extends State<NoConnectionScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
   bool _isRetrying = false;
   
   @override
@@ -25,6 +27,20 @@ class _NoConnectionScreenState extends State<NoConnectionScreen> with SingleTick
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+    
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeIn,
+      ),
+    );
+    
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOut,
+      ),
+    );
   }
   
   @override
@@ -48,7 +64,6 @@ class _NoConnectionScreenState extends State<NoConnectionScreen> with SingleTick
       if (isConnected) {
         widget.onRetry();
       } else {
-        // Show error message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -84,170 +99,187 @@ class _NoConnectionScreenState extends State<NoConnectionScreen> with SingleTick
         ),
         child: SafeArea(
           child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Animation with icon
-                  AnimatedBuilder(
-                    animation: _animationController,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(0, 10 * _animationController.value - 5),
-                        child: child,
-                      );
-                    },
-                    child: Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade100,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.wifi_off_rounded,
-                          size: 80,
-                          color: Colors.blue.shade700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  
-                  // Title
-                  const Text(
-                    'No Internet Connection',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Description
-                  Text(
-                    'We couldn\'t connect to the network. Please check your internet connection and try again.',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey.shade700,
-                      height: 1.5,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 40),
-                  
-                  // Retry button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton(
-                      onPressed: _isRetrying ? null : _retryConnection,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade400,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 2,
-                      ),
-                      child: _isRetrying
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Checking Connection...',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.refresh),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Try Again',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Animated icon
+                        AnimatedBuilder(
+                          animation: _animationController,
+                          builder: (context, child) {
+                            return Transform.translate(
+                              offset: Offset(0, 10 * _animationController.value - 5),
+                              child: child,
+                            );
+                          },
+                          child: Container(
+                            width: 140,
+                            height: 140,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade100,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.shade200.withOpacity(0.5),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
                                 ),
                               ],
                             ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Help text
-                  TextButton.icon(
-                    onPressed: () {
-                      // Show tips for troubleshooting
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Connection Troubleshooting'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildTroubleShootingItem(
-                                '1. Check your WiFi or mobile data',
-                                'Make sure your device is connected to the internet',
+                            child: Center(
+                              child: Icon(
+                                Icons.wifi_off_rounded,
+                                size: 80,
+                                color: Colors.blue.shade700,
                               ),
-                              const SizedBox(height: 12),
-                              _buildTroubleShootingItem(
-                                '2. Toggle Airplane Mode',
-                                'Turn airplane mode on and off to reset connections',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+                        
+                        // Title
+                        const Text(
+                          'No Internet Connection',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Description
+                        Text(
+                          'We couldn\'t connect to the network. Please check your internet connection and try again.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade700,
+                            height: 1.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 40),
+                        
+                        // Retry button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: ElevatedButton(
+                            onPressed: _isRetrying ? null : _retryConnection,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryColor,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: Colors.grey.shade400,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(height: 12),
-                              _buildTroubleShootingItem(
-                                '3. Restart your device',
-                                'Sometimes a simple restart can fix connectivity issues',
+                              elevation: 2,
+                            ),
+                            child: _isRetrying
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'Checking Connection...',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.refresh),
+                                      SizedBox(width: 12),
+                                      Text(
+                                        'Try Again',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Troubleshooting section
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
                               ),
                             ],
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('OK'),
-                            ),
-                          ],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.tips_and_updates,
+                                    color: Colors.amber.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Quick Tips',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              _buildTipItem(
+                                'Check your WiFi or mobile data',
+                                'Make sure your device is connected to the internet',
+                                Icons.wifi,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTipItem(
+                                'Toggle Airplane Mode',
+                                'Turn airplane mode on and off to reset connections',
+                                Icons.flight,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTipItem(
+                                'Restart your device',
+                                'Sometimes a simple restart can fix connectivity issues',
+                                Icons.power_settings_new,
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
-                    icon: Icon(
-                      Icons.help_outline,
-                      color: Colors.blue.shade700,
-                    ),
-                    label: Text(
-                      'Troubleshooting Tips',
-                      style: TextStyle(
-                        color: Colors.blue.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -256,11 +288,22 @@ class _NoConnectionScreenState extends State<NoConnectionScreen> with SingleTick
     );
   }
   
-  Widget _buildTroubleShootingItem(String title, String subtitle) {
+  Widget _buildTipItem(String title, String subtitle, IconData icon) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.check_circle, color: Colors.green, size: 20),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.blue.shade700,
+            size: 20,
+          ),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

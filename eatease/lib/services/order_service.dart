@@ -199,4 +199,18 @@ class OrderService {
       throw Exception('Failed to cancel order: $e');
     }
   }
+
+  // Update order rating
+  Future<void> updateOrderRating(String orderId, double rating, String review) async {
+    try {
+      await _firestore.collection('orders').doc(orderId).update({
+        'rating': rating,
+        'review': review,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error updating order rating: $e');
+      throw Exception('Failed to update order rating: $e');
+    }
+  }
 } 
