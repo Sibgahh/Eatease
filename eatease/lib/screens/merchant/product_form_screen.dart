@@ -43,14 +43,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+<<<<<<< Updated upstream
   // Removing preparation time controller
   // final _prepTimeController = TextEditingController();
+=======
+  final _imageUrlController = TextEditingController();
+  ProductModel? _currentProduct;
+>>>>>>> Stashed changes
 
   bool _isLoading = false;
   String? _errorMessage;
   // Removing category variable
   String _category = 'Main Course';
   bool _isAvailable = true;
+  bool _isAddingImageUrl = false;
   
   // Customization options
   List<CustomizationGroup> _customizationGroups = [];
@@ -77,6 +83,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     'Breakfast',
     'Fast Food',
   ];
+
+  String? _previewImageUrl;
+  bool _isLoadingPreview = false;
+  bool _previewError = false;
 
   @override
   void initState() {
@@ -112,8 +122,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+<<<<<<< Updated upstream
     // Removing preparation time disposal
     // _prepTimeController.dispose();
+=======
+    _imageUrlController.dispose();
+>>>>>>> Stashed changes
     super.dispose();
   }
 
@@ -1123,6 +1137,105 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  void _addImageUrl() {
+    final url = _imageUrlController.text.trim();
+    
+    // Check if URL is not empty
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an image URL')),
+      );
+      return;
+    }
+    
+    // Basic URL validation
+    bool isValidUrl = Uri.tryParse(url)?.hasAbsolutePath ?? false;
+    if (!isValidUrl) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid URL')),
+      );
+      return;
+    }
+    
+    // Check for common image extensions
+    final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+    bool hasImageExtension = imageExtensions.any((ext) => url.toLowerCase().endsWith(ext));
+    
+    if (!hasImageExtension && !url.contains('image')) {
+      // Show confirmation dialog if URL doesn't seem to be an image
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirm Image URL'),
+          content: const Text(
+            'The URL you entered does not appear to be a direct image link. '
+            'Are you sure this is a valid image URL?'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _confirmAddImageUrl(url);
+              },
+              child: const Text('Add Anyway'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _confirmAddImageUrl(url);
+    }
+  }
+  
+  void _confirmAddImageUrl(String url) {
+    setState(() {
+      _existingImageUrls.add(url);
+      _imageUrlController.clear();
+      _isAddingImageUrl = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Image URL added'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _toggleAddImageUrl() {
+    setState(() {
+      _isAddingImageUrl = !_isAddingImageUrl;
+      if (!_isAddingImageUrl) {
+        _imageUrlController.clear();
+        _previewImageUrl = null;
+        _previewError = false;
+      }
+    });
+  }
+
+  void _loadImagePreview() {
+    final url = _imageUrlController.text.trim();
+    
+    // Check if URL is not empty and valid
+    if (url.isEmpty || !(Uri.tryParse(url)?.hasAbsolutePath ?? false)) {
+      setState(() {
+        _previewImageUrl = null;
+        _previewError = false;
+      });
+      return;
+    }
+    
+    setState(() {
+      _isLoadingPreview = true;
+      _previewError = false;
+      _previewImageUrl = url;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1232,7 +1345,37 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           
+<<<<<<< Updated upstream
                           // Existing images
+=======
+                          InkWell(
+                            onTap: _toggleAddImageUrl,
+                            child: Container(
+                              width: 100,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: AppTheme.dividerColor),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.link, 
+                                    size: 40,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Add URL',
+                                    style: AppTheme.bodyMedium(color: AppTheme.primaryColor),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          
+>>>>>>> Stashed changes
                           for (int i = 0; i < _existingImageUrls.length; i++)
                             Stack(
                               children: [
@@ -1242,9 +1385,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                   margin: const EdgeInsets.only(right: 8),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(8),
-                                    image: DecorationImage(
-                                      image: NetworkImage(_existingImageUrls[i]),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      _existingImageUrls[i],
                                       fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          color: Colors.grey.shade200,
+                                          child: const Center(
+                                            child: Icon(Icons.error_outline, color: Colors.red, size: 32),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
                                 ),
@@ -1273,8 +1427,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                   margin: const EdgeInsets.only(right: 8),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(8),
-                                    image: DecorationImage(
-                                      image: FileImage(_newImageFiles[i]),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.file(
+                                      _newImageFiles[i],
                                       fit: BoxFit.cover,
                                     ),
                                   ),
@@ -1296,6 +1453,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         ],
                       ),
                     ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    if (_isAddingImageUrl)
+                      _buildUrlInputSection(),
                     
                     const SizedBox(height: 24),
                     
@@ -1494,6 +1656,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
+<<<<<<< Updated upstream
   // Add a method to run diagnostics
   Future<void> _runDiagnostics() async {
     setState(() {
@@ -1649,11 +1812,87 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         child: CircularProgressIndicator(
                           value: loadingProgress.expectedTotalBytes != null
                               ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+=======
+  Widget _buildUrlInputSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Enter image URL',
+            style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _imageUrlController,
+                  decoration: const InputDecoration(
+                    hintText: 'https://example.com/image.jpg',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.url,
+                  onChanged: (_) => _loadImagePreview(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _addImageUrl,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Add'),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _toggleAddImageUrl,
+              ),
+            ],
+          ),
+          
+          if (_previewImageUrl != null) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: Container(
+                width: 200,
+                height: 150,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    _previewImageUrl!,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) {
+                        // Image has loaded successfully
+                        return child;
+                      }
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded / 
+                                  (loadingProgress.expectedTotalBytes ?? 1)
+>>>>>>> Stashed changes
                               : null,
                         ),
                       );
                     },
                     errorBuilder: (context, error, stackTrace) {
+<<<<<<< Updated upstream
                       return const Center(
                         child: Text('Error loading image'),
                       );
@@ -1689,5 +1928,29 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _isLoading = false;
       });
     }
+=======
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.red, size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Invalid image URL',
+                              style: AppTheme.bodySmall(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+>>>>>>> Stashed changes
   }
 } 
