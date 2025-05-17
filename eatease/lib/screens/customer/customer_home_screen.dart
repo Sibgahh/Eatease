@@ -1574,27 +1574,6 @@ class _ProductCard extends StatelessWidget {
                       },
                     ),
                   ),
-                  // Add closed indicator on the image if store is closed
-                  if (!isStoreOpen)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'Closed',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
