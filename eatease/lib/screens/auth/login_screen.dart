@@ -23,8 +23,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _isLoading = false;
   bool _obscurePassword = true;
   String _errorMessage = '';
-  bool _isDeviceConflict = false;
-  String _conflictDeviceId = '';
   
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -73,8 +71,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() {
       _isLoading = true;
       _errorMessage = '';
-      _isDeviceConflict = false;
-      _conflictDeviceId = '';
     });
 
     try {
@@ -90,56 +86,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
     } catch (e) {
       print('$_logPrefix Login error: $e');
-      
-      // Check if the error is a device conflict
-      if (e.toString().contains('active_device_conflict:')) {
-        // Extract the device ID from the error message
-        String errorMsg = e.toString();
-        String deviceId = errorMsg.split('active_device_conflict:')[1];
-        
-        setState(() {
-          _isDeviceConflict = true;
-          _conflictDeviceId = deviceId;
-          _errorMessage = 'This account is already logged in on another device. You must log out from the other device first or select "Sign In Anyway" to force log out other devices.';
-        });
-      } else {
-        setState(() {
-          _errorMessage = e.toString();
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-  
-  Future<void> _forceLogin() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-      _isDeviceConflict = false;
-    });
-
-    try {
-      print('$_logPrefix Force login with email: ${_emailController.text.trim()}');
-      await _authService.forceLoginOnNewDevice(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-      
-      print('$_logPrefix Force login successful, AuthWrapper will handle navigation');
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.initial);
-      }
-    } catch (e) {
-      print('$_logPrefix Force login error: $e');
       setState(() {
         _errorMessage = e.toString();
       });
@@ -151,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
     }
   }
-
+  
   @override
   Widget build(BuildContext context) {
     print('$_logPrefix Building login screen at ${DateTime.now().toIso8601String()}');
@@ -415,47 +361,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     ),
                                   ),
                                 if (_errorMessage.isNotEmpty) const SizedBox(height: 20.0),
-                                
-                                // Force Login Button (Only show when there's a device conflict)
-                                if (_isDeviceConflict)
-                                  ElevatedButton(
-                                    onPressed: _isLoading ? null : _forceLogin,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orange,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 16.0),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
-                                      ),
-                                      elevation: 3,
-                                      disabledBackgroundColor: Colors.orange.withOpacity(0.6),
-                                    ),
-                                    child: _isLoading
-                                        ? SizedBox(
-                                            height: 24,
-                                            width: 24,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2.5,
-                                            ),
-                                          )
-                                        : Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.warning_amber_rounded),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Sign In Anyway',
-                                                style: TextStyle(
-                                                  fontSize: 17.0,
-                                                  fontWeight: FontWeight.bold,
-                                                  letterSpacing: 0.5,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                  ),
-                                if (_isDeviceConflict) const SizedBox(height: 12.0),
                                 
                                 // Login Button
                                 ElevatedButton(

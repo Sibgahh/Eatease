@@ -564,6 +564,53 @@ class ProductService {
     }
   }
 
+  // Update an existing product with explicit null fields
+  Future<void> updateProductWithExplicitNullFields(String productId, ProductModel product, List<String> fieldsToSetNull) async {
+    if (currentMerchantId == null) {
+      throw Exception('No authenticated merchant found');
+    }
+
+    try {
+      print('Updating product: ${product.name} (ID: $productId) with explicit null fields: $fieldsToSetNull');
+      
+      // Ensure the product belongs to the current merchant
+      final existingProduct = await getProductById(productId);
+      if (existingProduct == null) {
+        throw Exception('Product not found');
+      }
+      
+      if (existingProduct.merchantId != currentMerchantId) {
+        throw Exception('You do not have permission to edit this product');
+      }
+      
+      final productData = product.copyWith(
+        updatedAt: DateTime.now(),
+        imageUrls: product.imageUrls.isEmpty ? [] : product.imageUrls,
+      ).toMap();
+      
+      // Prepare the update data with server timestamp
+      final dataWithServerTimestamp = {
+        ...productData,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      // Explicitly set specified fields to null
+      for (var field in fieldsToSetNull) {
+        dataWithServerTimestamp[field] = null;
+      }
+      
+      print('Attempting to update product in Firestore with explicit null fields...');
+      await _products.doc(productId).update(dataWithServerTimestamp);
+      print('Product updated successfully with explicit null fields');
+    } catch (e) {
+      print('Error updating product with explicit null fields: $e');
+      if (e is FirebaseException) {
+        print('Firebase error code: ${e.code}, message: ${e.message}');
+      }
+      throw Exception('Failed to update product with explicit null fields: $e');
+    }
+  }
+
   // Delete a product
   Future<void> deleteProduct(String productId) async {
     if (currentMerchantId == null) {

@@ -56,12 +56,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 : RegisterScreen(onLogin: toggleView);
           }
 
-          // User is logged in, first verify if this is the correct device
-          return FutureBuilder<bool>(
-            future: _authService.verifyCurrentDevice(),
-            builder: (context, deviceVerified) {
-              // Show loading indicator while checking device
-              if (deviceVerified.connectionState == ConnectionState.waiting) {
+          // User is logged in, determine role and navigate
+          print("[AUTH_WRAPPER] User logged in: ${userSnapshot.data!.uid}");
+          return FutureBuilder<String>(
+            future: _determineHomeRoute(_authService),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(
                     child: CircularProgressIndicator(),
@@ -69,53 +69,32 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 );
               }
 
-              // If device verification failed, show login screen
-              if (deviceVerified.hasError || deviceVerified.data == false) {
-                print("[AUTH_WRAPPER] Device verification failed, showing login screen");
-                return LoginScreen(onRegister: toggleView);
+              if (snapshot.hasError) {
+                print("[AUTH_WRAPPER] Error determining route: ${snapshot.error}");
+                return Scaffold(
+                  body: Center(
+                    child: Text('Error: ${snapshot.error}'),
+                  ),
+                );
               }
 
-              // Device verified, determine role and navigate accordingly
-              print("[AUTH_WRAPPER] User logged in: ${userSnapshot.data!.uid}");
-              return FutureBuilder<String>(
-                future: _determineHomeRoute(_authService),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                      body: Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
+              final route = snapshot.data ?? AppRoutes.customer;
+              print("[AUTH_WRAPPER] Navigating to route: $route");
+              
+              return Navigator(
+                onGenerateRoute: (settings) {
+                  Widget page;
+                  switch (route) {
+                    case AppRoutes.admin:
+                      page = const AdminDashboard();
+                      break;
+                    case AppRoutes.merchant:
+                      page = const MerchantMainScreen();
+                      break;
+                    default:
+                      page = const CustomerHomeScreen();
                   }
-
-                  if (snapshot.hasError) {
-                    print("[AUTH_WRAPPER] Error determining route: ${snapshot.error}");
-                    return Scaffold(
-                      body: Center(
-                        child: Text('Error: ${snapshot.error}'),
-                      ),
-                    );
-                  }
-
-                  final route = snapshot.data ?? AppRoutes.customer;
-                  print("[AUTH_WRAPPER] Navigating to route: $route");
-                  
-                  return Navigator(
-                    onGenerateRoute: (settings) {
-                      Widget page;
-                      switch (route) {
-                        case AppRoutes.admin:
-                          page = const AdminDashboard();
-                          break;
-                        case AppRoutes.merchant:
-                          page = const MerchantMainScreen();
-                          break;
-                        default:
-                          page = const CustomerHomeScreen();
-                      }
-                      return MaterialPageRoute(builder: (context) => page);
-                    },
-                  );
+                  return MaterialPageRoute(builder: (context) => page);
                 },
               );
             },

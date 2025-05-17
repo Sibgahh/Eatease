@@ -25,7 +25,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final GlobalKey _streamBuilderKey = GlobalKey();
+  GlobalKey _streamBuilderKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +133,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                               // If a product was added, refresh the list
                               if (productAdded == true) {
                                 setState(() {
-                                  // This will trigger a rebuild which will re-fetch the product list
+                                  // Force a rebuild of the StreamBuilder
+                                  _streamBuilderKey = GlobalKey();
                                 });
                               }
                             },
@@ -181,8 +182,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       ],
                     ),
                     child: InkWell(
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () async {
+                        final productUpdated = await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => ProductFormScreen(
@@ -190,6 +191,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
                             ),
                           ),
                         );
+                        
+                        // If the product was updated, refresh the list
+                        if (productUpdated == true) {
+                          setState(() {
+                            // Force a rebuild of the StreamBuilder
+                            _streamBuilderKey = GlobalKey();
+                          });
+                        }
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
@@ -351,10 +360,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                               ),
                                             );
                                             
-                                            // If the product was updated, refresh the list to ensure changes are visible
+                                            // If the product was updated, refresh the list
                                             if (productUpdated == true) {
                                               setState(() {
-                                                // This will trigger a rebuild which will re-fetch the product list
+                                                // Force a rebuild of the StreamBuilder
+                                                _streamBuilderKey = GlobalKey();
                                               });
                                             }
                                           },
@@ -455,10 +465,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       ),
                     );
                     
-                    // If the product was added, refresh the list to ensure changes are visible
+                    // If the product was added, refresh the list
                     if (productAdded == true) {
                       setState(() {
-                        // This will trigger a rebuild which will re-fetch the product list
+                        // Force a rebuild of the StreamBuilder
+                        _streamBuilderKey = GlobalKey();
                       });
                     }
                   },
@@ -484,10 +495,39 @@ class _ProductListScreenState extends State<ProductListScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              // Close the dialog
               Navigator.pop(context);
+              
+              // Show loading indicator
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Deleting product...'),
+                      ],
+                    ),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+
               try {
+                // Delete the product
                 await _productService.deleteProduct(product.id);
+                
                 if (mounted) {
+                  // Show success message
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Row(
@@ -508,11 +548,25 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   );
                 }
               } catch (e) {
+                print('Error deleting product: $e');
                 if (mounted) {
+                  // Show error message
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Error deleting product: $e'),
+                      content: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.white),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text('Failed to delete product: ${e.toString()}'),
+                          ),
+                        ],
+                      ),
                       backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   );
                 }

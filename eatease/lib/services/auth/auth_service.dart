@@ -41,10 +41,6 @@ class AuthService {
     }
     
     try {
-      // Get current device ID
-      final deviceInfo = await _deviceService.getDeviceInfo();
-      final currentDeviceId = deviceInfo['deviceId']!;
-      
       // Get user data
       final userDoc = await _firestore.collection('users').doc(currentUser!.uid).get();
       
@@ -52,22 +48,8 @@ class AuthService {
         return false;
       }
       
-      // Get active device ID
-      final userData = userDoc.data()!;
-      final activeDeviceId = userData['activeDeviceId'];
-      
-      // If no active device is set, update with current device
-      if (activeDeviceId == null) {
-        await _firestore.collection('users').doc(currentUser!.uid).update({
-          'activeDeviceId': currentDeviceId,
-          'lastDeviceLogin': FieldValue.serverTimestamp(),
-          'lastDeviceName': deviceInfo['deviceName'],
-        });
-        return true;
-      }
-      
-      // Check if current device matches active device
-      return activeDeviceId == currentDeviceId;
+      // Since we've removed device conflict functionality, always return true
+      return true;
     } catch (e) {
       print("Error verifying device: $e");
       return false;
@@ -137,22 +119,9 @@ class AuthService {
           await _auth.signOut();
           throw Exception('Your account has been disabled. Please contact admin for assistance.');
         }
-
-        // Check if user is already logged in on another device
-        String? activeDeviceId = userData['activeDeviceId'];
-        if (activeDeviceId != null && activeDeviceId != currentDeviceId) {
-          // User is already logged in on another device
-          print("User already logged in on device: $activeDeviceId");
-          
-          // Sign out the user immediately
-          await _auth.signOut();
-          
-          // Throw an exception to notify the user
-          throw Exception('active_device_conflict:$activeDeviceId');
-        }
       }
       
-      // No conflicts, update device info and last login time
+      // Update device info and last login time
       await _firestore.collection('users').doc(result.user!.uid).update({
         'lastLogin': FieldValue.serverTimestamp(),
         'activeDeviceId': currentDeviceId,
@@ -167,42 +136,12 @@ class AuthService {
     }
   }
 
-  // Force logout from previous device and login on current device
-  Future<auth.UserCredential> forceLoginOnNewDevice(String email, String password) async {
-    try {
-      // First authenticate with Firebase
-      auth.UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      
-      // Get the current device ID
-      Map<String, String> deviceInfo = await _deviceService.getDeviceInfo();
-      String currentDeviceId = deviceInfo['deviceId']!;
-      String deviceName = deviceInfo['deviceName']!;
-
-      // Update device info and last login time, forcefully replacing the previous device
-      await _firestore.collection('users').doc(result.user!.uid).update({
-        'lastLogin': FieldValue.serverTimestamp(),
-        'activeDeviceId': currentDeviceId,
-        'lastDeviceLogin': FieldValue.serverTimestamp(),
-        'lastDeviceName': deviceName,
-      });
-      
-      return result;
-    } catch (e) {
-      print("Force login error: $e");
-      rethrow;
-    }
-  }
-
   // Sign out
   Future<void> signOut() async {
     try {
-      // Clear the device ID from the user's record
+      // Update device tracking for analytics
       if (currentUser != null) {
         await _firestore.collection('users').doc(currentUser!.uid).update({
-          'activeDeviceId': null,
           'lastDeviceLogin': FieldValue.serverTimestamp(),
         });
       }

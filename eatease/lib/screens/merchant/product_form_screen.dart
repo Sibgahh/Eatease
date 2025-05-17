@@ -17,7 +17,7 @@ import 'package:flutter/services.dart';
 class CustomizationGroup {
   String title;
   List<String> options;
-  List<double> prices; // Add prices for each option
+  List<double> prices;
   bool isRequired;
   
   CustomizationGroup({
@@ -43,12 +43,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
-  // Removing preparation time controller
-  // final _prepTimeController = TextEditingController();
+  ProductModel? _currentProduct;
 
   bool _isLoading = false;
   String? _errorMessage;
-  // Removing category variable
   String _category = 'Main Course';
   bool _isAvailable = true;
   
@@ -67,7 +65,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final List<File> _newImageFiles = [];
   final ImagePicker _imagePicker = ImagePicker();
 
-  // Removing category options
   final List<String> _categoryOptions = [
     'Appetizer',
     'Main Course',
@@ -82,13 +79,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   void initState() {
     super.initState();
     if (widget.product != null) {
+      // Initialize current product
+      _currentProduct = widget.product;
+      
       // Editing existing product
       _nameController.text = widget.product!.name;
       _descriptionController.text = widget.product!.description;
       _priceController.text = widget.product!.price.toString();
-      // Removing preparation time initialization
-      // _prepTimeController.text = widget.product!.preparationTimeMinutes.toString();
-      // Removing category initialization
       _category = widget.product!.category;
       _isAvailable = widget.product!.isAvailable;
       _existingImageUrls.addAll(widget.product!.imageUrls);
@@ -97,13 +94,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       if (widget.product!.customizations != null) {
         _loadCustomizations(widget.product!.customizations!);
       }
-    } else {
-      // Default values for new product
-      // Removing preparation time default
-      // _prepTimeController.text = '30';
-      
-      // Add one empty customization group for new products
-      _customizationGroups.add(CustomizationGroup(title: '', options: ['', ''], prices: [0.0, 0.0], isRequired: false));
     }
   }
 
@@ -112,19 +102,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    // Removing preparation time disposal
-    // _prepTimeController.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage() async {
     try {
-      // Set temporary loading state
       setState(() {
         _errorMessage = null;
       });
       
-      // Show a bottom sheet with options
       showModalBottomSheet(
         context: context,
         builder: (BuildContext context) {
@@ -155,7 +141,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
     } catch (e) {
       print('Error showing image picker: $e');
-      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error accessing image picker: $e'),
@@ -167,10 +152,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   
   Future<void> _pickImageFromSource(ImageSource source) async {
     try {
-      // For gallery, allow multiple selection
       if (source == ImageSource.gallery) {
         final List<XFile> pickedFiles = await _imagePicker.pickMultiImage(
-          imageQuality: 70, // Lower quality for faster upload
+          imageQuality: 70,
         );
         
         if (pickedFiles.isNotEmpty) {
@@ -181,7 +165,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           });
         }
       } else {
-        // For camera, just pick one image
         final XFile? pickedFile = await _imagePicker.pickImage(
           source: source,
           imageQuality: 70,
@@ -195,7 +178,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       }
     } catch (e) {
       print('Error picking image: $e');
-      // Show error in a non-blocking way
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -237,11 +219,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     });
 
     try {
-      // Upload any new images
       final List<String> allImageUrls = [..._existingImageUrls];
       
       if (_newImageFiles.isNotEmpty) {
-        // First try the diagnostics to see if Firebase Storage is working
         try {
           final diagnosticResults = await _productService.diagnoseFbStorageSecurityRules();
           if (!diagnosticResults['canWrite']) {
@@ -254,16 +234,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           }
         } catch (e) {
           print('Warning: Failed to run storage diagnostics: $e');
-          // Continue anyway since this is just a pre-check
         }
         
-        // Use the new streaming upload method if we have files to upload
         try {
           bool uploadFailed = false;
           
           _productService.uploadProductImagesWithProgress(_newImageFiles)
             .listen((uploadStatus) {
-              // Update the UI with progress
               setState(() {
                 _uploadProgress = uploadStatus['progress'];
                 _isUploading = !uploadStatus['isComplete'];
@@ -274,27 +251,22 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 } else {
                   _uploadStatus = 'Processing...';
                   
-                  // Add the URLs to our list
                   if (uploadStatus['imageUrls'] != null) {
                     List<String> urls = List<String>.from(uploadStatus['imageUrls']);
                     allImageUrls.addAll(urls);
                   }
                   
-                  // Check for errors
                   if (uploadStatus['errors'] != null && uploadStatus['errors'].isNotEmpty) {
                     _errorMessage = 'Some images could not be uploaded: ${uploadStatus['errors'].length} errors';
                     
-                    // If we have errors, but also at least one successful upload, continue
                     if (uploadStatus['imageUrls'] != null && 
                         (uploadStatus['imageUrls'] as List).isNotEmpty) {
                       _continueProductSave(allImageUrls);
                     } else {
-                      // If we have no successful uploads, try the fallback
                       uploadFailed = true;
                       _tryFallbackUpload(_newImageFiles, allImageUrls);
                     }
                   } else {
-                    // If no errors, continue with product save
                     _continueProductSave(allImageUrls);
                   }
                 }
@@ -303,7 +275,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               print('Error in batch upload: $e');
               uploadFailed = true;
               
-              // Try fallback method with single images
               setState(() {
                 _uploadStatus = 'Trying alternative upload method...';
               });
@@ -313,7 +284,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         } catch (e) {
           print('Fatal error in batch upload: $e');
           
-          // Try fallback method with single images
           setState(() {
             _uploadStatus = 'Trying alternative upload method...';
           });
@@ -321,7 +291,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           _tryFallbackUpload(_newImageFiles, allImageUrls);
         }
       } else {
-        // If no new images, continue with existing ones
         _continueProductSave(allImageUrls);
       }
     } catch (e) {
@@ -333,7 +302,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
   
-  // Fallback method that tries to upload images one by one directly
   Future<void> _tryFallbackUpload(List<File> files, List<String> existingUrls) async {
     setState(() {
       _uploadStatus = 'Trying fallback upload method...';
@@ -351,7 +319,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           _uploadStatus = 'Uploading image ${i + 1} of ${files.length} (fallback method)...';
         });
         
-        // Try direct upload for this single file
         final url = await _productService.uploadProductImage(files[i]);
         
         if (!url.contains('placeholder')) {
@@ -365,7 +332,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       }
     }
     
-    // Check if we have at least one successful upload
     if (allImageUrls.isNotEmpty) {
       if (errors.isNotEmpty) {
         setState(() {
@@ -383,13 +349,110 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
   
-  // Continue with product save after images are processed
+  Future<void> _updateExistingProduct(List<String> imageUrls, double price, Map<String, dynamic> customizations) async {
+    try {
+      print('DEBUG: Starting product update');
+      print('DEBUG: Current product ID: ${_currentProduct!.id}');
+      
+      // Rebuild the customizations map directly from current UI state
+      final currentCustomizations = _buildCustomizationsMap();
+      print('DEBUG: Current customizations from UI: $currentCustomizations');
+      
+      // If we already have a modified currentProduct from customization changes, use that as base
+      // but update other fields that might have changed
+      final updatedProduct = _currentProduct!.copyWith(
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        price: price,
+        imageUrls: imageUrls,
+        isAvailable: _isAvailable,
+        category: _category,
+        // Ensure we're properly setting customizations to null if it's empty
+        customizations: currentCustomizations.isEmpty ? null : currentCustomizations,
+        updatedAt: DateTime.now(),
+      );
+      
+      print('DEBUG: Updated product data: ${updatedProduct.toMap()}');
+      print('DEBUG: Final customizations: ${updatedProduct.customizations}');
+      
+      // If we're explicitly setting customizations to null, make sure to clear it in Firestore
+      if (currentCustomizations.isEmpty) {
+        print('DEBUG: Clearing customizations in Firestore');
+        await _productService.updateProductWithExplicitNullFields(
+          _currentProduct!.id, 
+          updatedProduct,
+          ['customizations']
+        );
+      } else {
+        await _productService.updateProduct(_currentProduct!.id, updatedProduct);
+      }
+      
+      print('DEBUG: Product update successful');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Product updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      print('DEBUG: Error updating product: $e');
+      setState(() {
+        _errorMessage = 'Error updating product: $e';
+        _isLoading = false;
+        _isUploading = false;
+      });
+    }
+  }
+
+  Future<void> _createNewProduct(List<String> imageUrls, double price, Map<String, dynamic> customizations) async {
+    try {
+      final newProduct = ProductModel(
+        id: const Uuid().v4(),
+        merchantId: _productService.currentMerchantId ?? '',
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        price: price,
+        imageUrls: imageUrls,
+        isAvailable: _isAvailable,
+        category: _category,
+        customizations: customizations.isEmpty ? null : customizations,
+        createdAt: DateTime.now(),
+      );
+
+      await _productService.addProduct(newProduct);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Product added successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error creating product: $e';
+        _isLoading = false;
+        _isUploading = false;
+      });
+    }
+  }
+
   Future<void> _continueProductSave(List<String> imageUrls) async {
     try {
-      double price = 0;
-      
+      // Parse and validate price
+      double price;
       try {
-        price = double.parse(_priceController.text.replaceAll('.', ''));
+        // Fix price parsing by correctly handling the formatted number
+        final priceText = _priceController.text.replaceAll('.', '');
+        price = double.parse(priceText);
+        
+        print('DEBUG: Parsed price: $price');
       } catch (e) {
         setState(() {
           _errorMessage = 'Invalid price format';
@@ -399,75 +462,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         return;
       }
 
-      // Process customization groups to a format that can be stored
+      print('DEBUG: Starting product save...');
+      
+      // Build fresh customizations map directly from UI state
       final Map<String, dynamic> customizations = _buildCustomizationsMap();
-
-      if (widget.product == null) {
-        // Create new product
-        try {
-          final newProduct = ProductModel(
-            id: const Uuid().v4(), // Will be replaced by Firestore
-            merchantId: _productService.currentMerchantId ?? '',
-            name: _nameController.text.trim(),
-            description: _descriptionController.text.trim(),
-            price: price,
-            imageUrls: imageUrls,
-            isAvailable: _isAvailable,
-            category: _category,
-            customizations: customizations.isNotEmpty ? customizations : null,
-            createdAt: DateTime.now(),
-          );
-
-          await _productService.addProduct(newProduct);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Product added successfully'),
-                backgroundColor: Colors.green,
-              ),
-            );
-            // Close the form screen and indicate success
-            Navigator.pop(context, true);
-          }
-        } catch (e) {
-          setState(() {
-            _errorMessage = 'Error adding product: $e';
-            _isLoading = false;
-            _isUploading = false;
-          });
-        }
+      print('DEBUG: Customizations to save: $customizations');
+      
+      // Create or update product based on whether we're editing an existing product
+      if (_currentProduct == null) {
+        await _createNewProduct(imageUrls, price, customizations);
       } else {
-        // Update existing product
-        try {
-          final updatedProduct = widget.product!.copyWith(
-            name: _nameController.text.trim(),
-            description: _descriptionController.text.trim(),
-            price: price,
-            imageUrls: imageUrls,
-            isAvailable: _isAvailable,
-            category: _category,
-            customizations: customizations.isNotEmpty ? customizations : null,
-            updatedAt: DateTime.now(),
-          );
-
-          await _productService.updateProduct(widget.product!.id, updatedProduct);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Product updated successfully'),
-                backgroundColor: Colors.green,
-              ),
-            );
-            // Close the form screen and refresh the product list
-            Navigator.pop(context, true); // Return true to indicate the product was updated
-          }
-        } catch (e) {
-          setState(() {
-            _errorMessage = 'Error updating product: $e';
-            _isLoading = false;
-            _isUploading = false;
-          });
-        }
+        await _updateExistingProduct(imageUrls, price, customizations);
       }
     } catch (e) {
       setState(() {
@@ -478,242 +483,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
-  // Add a method to check authentication status
-  void _checkAuthStatus() {
-    final user = FirebaseAuth.instance.currentUser;
-    
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Not authenticated! Please log out and log back in.'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 5),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Authenticated as: ${user.email} (${user.uid})'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 5),
-        ),
-      );
-    }
-  }
-
-  // Add a test method to verify Firebase Storage rules
-  Future<void> _testStorageRules() async {
-    setState(() {
-      _isLoading = true;
-      _uploadStatus = 'Testing Firebase Storage rules...';
-    });
-    
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('Not authenticated. Please sign in first.');
-      }
-      
-      // Create a test file in memory
-      final List<int> bytes = utf8.encode('Test file created by ${user.email} at ${DateTime.now().toIso8601String()}');
-      final testFileName = 'test_file_${DateTime.now().millisecondsSinceEpoch}.txt';
-      
-      // Reference to Firebase Storage
-      final FirebaseStorage storage = FirebaseStorage.instance;
-      final storageRef = storage.ref();
-      
-      // First test: top level directory
-      final testRef1 = storageRef.child(testFileName);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Attempting to create test file at root level...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      
-      try {
-        // Try to upload to root
-        await testRef1.putData(Uint8List.fromList(bytes));
-        final url1 = await testRef1.getDownloadURL();
-        
-        // If successful, show success and try to delete
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Root level write successful: $url1'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        
-        try {
-          await testRef1.delete();
-          print('Root test file deleted');
-        } catch (e) {
-          print('Could not delete root test file: $e');
-        }
-      } catch (e) {
-        print('Root level test failed: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Root level access denied: ${e.toString()}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-      
-      // Second test: user directory
-      await Future.delayed(Duration(milliseconds: 500)); // Small delay between tests
-      final testRef2 = storageRef.child('users/${user.uid}/$testFileName');
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Attempting to create test file in user directory...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      
-      try {
-        // Try to upload to user directory
-        await testRef2.putData(Uint8List.fromList(bytes));
-        final url2 = await testRef2.getDownloadURL();
-        
-        // If successful, show success and try to delete
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('User directory write successful: $url2'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        
-        try {
-          await testRef2.delete();
-          print('User directory test file deleted');
-        } catch (e) {
-          print('Could not delete user directory test file: $e');
-        }
-      } catch (e) {
-        print('User directory test failed: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('User directory access denied: ${e.toString()}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-      
-      // Third test: products directory
-      await Future.delayed(Duration(milliseconds: 500)); // Small delay between tests
-      final testRef3 = storageRef.child('products/${user.uid}/$testFileName');
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Attempting to create test file in products directory...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      
-      try {
-        // Try to upload to products directory
-        await testRef3.putData(Uint8List.fromList(bytes));
-        final url3 = await testRef3.getDownloadURL();
-        
-        // If successful, show success and try to delete
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Products directory write successful: $url3'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        
-        try {
-          await testRef3.delete();
-          print('Products directory test file deleted');
-        } catch (e) {
-          print('Could not delete products directory test file: $e');
-        }
-      } catch (e) {
-        print('Products directory test failed: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Products directory access denied: ${e.toString()}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-      
-      // Show final instructions
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Firebase Storage Rules Test'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Test completed. If all tests failed, you need to fix your Firebase Storage rules.'),
-              const SizedBox(height: 16),
-              const Text('Recommended rules:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'rules_version = \'2\';\n'
-                  'service firebase.storage {\n'
-                  '  match /b/{bucket}/o {\n'
-                  '    match /{allPaths=**} {\n'
-                  '      allow read, write: if request.auth != null;\n'
-                  '    }\n'
-                  '  }\n'
-                  '}',
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-      
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 5),
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  // Load customizations from product data
   void _loadCustomizations(Map<String, dynamic> customizations) {
     try {
       _customizationGroups.clear();
       
       customizations.forEach((title, data) {
         if (data is Map) {
-          // New format with options and prices
           List<String> options = [];
           List<double> prices = [];
           bool isRequired = false;
@@ -726,7 +501,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             prices = List<double>.from(data['prices'].map((price) => 
                 price is num ? price.toDouble() : 0.0));
           } else {
-            // Create default prices (0.0) for each option
             prices = List<double>.filled(options.length, 0.0);
           }
           
@@ -743,7 +517,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             ),
           );
         } else if (data is List) {
-          // Old format with just options, no prices
           List<String> options = List<String>.from(data.map((option) => option.toString()));
           List<double> prices = List<double>.filled(options.length, 0.0);
           
@@ -758,48 +531,59 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         }
       });
       
-      // If no customizations were loaded, add an empty group
       if (_customizationGroups.isEmpty) {
         _customizationGroups.add(CustomizationGroup(title: '', options: [''], prices: [0.0], isRequired: false));
       }
     } catch (e) {
       print('Error loading customizations: $e');
-      // Add an empty group if there was an error
       _customizationGroups.add(CustomizationGroup(title: '', options: [''], prices: [0.0], isRequired: false));
     }
   }
   
-  // Build customizations map for saving to Firestore
   Map<String, dynamic> _buildCustomizationsMap() {
     final Map<String, dynamic> result = {};
+    
+    print('DEBUG: Building customizations map from ${_customizationGroups.length} groups');
     
     for (var group in _customizationGroups) {
       // Skip empty groups or groups with no title
       if (group.title.isEmpty || group.options.every((option) => option.isEmpty)) {
+        print('DEBUG: Skipping empty group with title: "${group.title}"');
         continue;
       }
       
       // Filter out empty options
       final nonEmptyOptions = group.options.where((option) => option.isNotEmpty).toList();
+      final relevantPrices = group.prices.sublist(0, nonEmptyOptions.length);
       
       // Only add groups with at least one option
       if (nonEmptyOptions.isNotEmpty) {
+        print('DEBUG: Adding customization group "${group.title}" with ${nonEmptyOptions.length} options');
         result[group.title] = {
           'options': nonEmptyOptions,
-          'prices': group.prices.sublist(0, nonEmptyOptions.length),
+          'prices': relevantPrices,
           'isRequired': group.isRequired,
         };
+      } else {
+        print('DEBUG: Skipping group "${group.title}" with no non-empty options');
       }
     }
     
+    print('DEBUG: Final customizations map has ${result.length} groups: ${result.keys}');
     return result;
   }
   
-  // Build the customization section UI
   Widget _buildCustomizationSection() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // List existing customization groups
+        const SizedBox(height: 8),
+        Text(
+          'Add customization options for your product if needed. This is optional.',
+          style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+        ),
+        const SizedBox(height: 16),
+        
         ..._customizationGroups.asMap().entries.map((entry) {
           final index = entry.key;
           final group = entry.value;
@@ -816,7 +600,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Group header with delete button
                   Row(
                     children: [
                       Expanded(
@@ -834,7 +617,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   ),
                   const SizedBox(height: 12),
                   
-                  // Group title field
                   TextFormField(
                     initialValue: group.title,
                     decoration: const InputDecoration(
@@ -850,7 +632,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   ),
                   const SizedBox(height: 12),
                   
-                  // Required toggle
                   SwitchListTile(
                     title: const Text('Required Selection'),
                     subtitle: const Text('Customer must select one option'),
@@ -865,7 +646,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   ),
                   const Divider(),
                   
-                  // Options header
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
                     child: Row(
@@ -884,12 +664,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
                           ),
                         ),
-                        const SizedBox(width: 40), // Space for delete button
+                        const SizedBox(width: 40),
                       ],
                     ),
                   ),
                   
-                  // Options list
                   ...group.options.asMap().entries.map((optionEntry) {
                     final optionIndex = optionEntry.key;
                     final option = optionEntry.value;
@@ -902,7 +681,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Option name
                           Expanded(
                             flex: 6,
                             child: TextFormField(
@@ -922,7 +700,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          // Option price
                           Expanded(
                             flex: 4,
                             child: TextFormField(
@@ -942,7 +719,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                   if (newValue.text.isEmpty) {
                                     return newValue;
                                   }
-                                  // Format the number with thousand separators
                                   final value = int.parse(newValue.text);
                                   final formatted = NumberFormat("#,###", "id_ID").format(value);
                                   return TextEditingValue(
@@ -961,7 +737,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                           double.parse(value.replaceAll('.', ''));
                                     }
                                   } catch (e) {
-                                    // Ignore parse errors
                                     _customizationGroups[index].prices[optionIndex] = 0.0;
                                   }
                                 });
@@ -969,7 +744,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          // Delete option button
                           IconButton(
                             icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
                             onPressed: () => _removeOption(index, optionIndex),
@@ -982,7 +756,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ).animate().fadeIn(duration: 300.ms);
                   }).toList(),
                   
-                  // Add option button
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.add, size: 16),
@@ -1000,16 +773,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ).animate().fadeIn(duration: 300.ms);
         }).toList(),
         
-        // Add group button
         const SizedBox(height: 8),
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton.icon(
+          child: OutlinedButton.icon(
             icon: const Icon(Icons.add),
-            label: const Text('Add New Customization Group'),
+            label: const Text('Add Customization Group'),
             onPressed: _addCustomizationGroup,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor.withOpacity(0.9),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primaryColor,
+              side: BorderSide(color: AppTheme.primaryColor),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
@@ -1018,7 +791,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
   
-  // Add a new customization group
   void _addCustomizationGroup() {
     setState(() {
       _customizationGroups.add(CustomizationGroup(
@@ -1029,7 +801,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       ));
     });
     
-    // Show a snackbar
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('New customization group added'),
@@ -1038,14 +809,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
   
-  // Add a new option to a group
   void _addOption(int groupIndex) {
     setState(() {
       _customizationGroups[groupIndex].options.add('');
       _customizationGroups[groupIndex].prices.add(0.0);
     });
     
-    // Show a snackbar
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('New option added'),
@@ -1054,73 +823,57 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
   
-  // Remove an option from a group
   void _removeOption(int groupIndex, int optionIndex) {
-    if (_customizationGroups[groupIndex].options.length > 1) {
-      setState(() {
-        _customizationGroups[groupIndex].options.removeAt(optionIndex);
-        
-        // Also remove the corresponding price
-        if (optionIndex < _customizationGroups[groupIndex].prices.length) {
-          _customizationGroups[groupIndex].prices.removeAt(optionIndex);
-        }
-      });
+    setState(() {
+      _customizationGroups[groupIndex].options.removeAt(optionIndex);
       
-      // Show a snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Option removed'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    } else {
-      // Don't remove the last option, just clear it
-      setState(() {
-        _customizationGroups[groupIndex].options[optionIndex] = '';
-        _customizationGroups[groupIndex].prices[optionIndex] = 0.0;
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You need at least one option. Field cleared instead.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
+      if (optionIndex < _customizationGroups[groupIndex].prices.length) {
+        _customizationGroups[groupIndex].prices.removeAt(optionIndex);
+      }
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Option removed'),
+        duration: Duration(seconds: 1),
+      ),
+    );
   }
   
-  // Remove a customization group
   void _removeCustomizationGroup(int index) {
-    if (_customizationGroups.length > 1) {
-      setState(() {
+    // Store the group title before removing it for debug purposes
+    final String groupTitle = index < _customizationGroups.length ? _customizationGroups[index].title : "unknown";
+
+    setState(() {
+      // Remove the group from the list
+      if (index < _customizationGroups.length) {
         _customizationGroups.removeAt(index);
-      });
-      
-      // Show a snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Customization group removed'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    } else {
-      // Don't remove the last group, just clear it
-      setState(() {
-        _customizationGroups[index] = CustomizationGroup(
-          title: '', 
-          options: [''], 
-          prices: [0.0],
-          isRequired: false,
-        );
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You need at least one customization group. Fields cleared instead.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
+        
+        // Update the current product's customizations if we're editing an existing product
+        if (_currentProduct != null) {
+          // Force rebuild the customizations map from scratch
+          final customizations = _buildCustomizationsMap();
+          print('DEBUG: Customizations after removing group "$groupTitle": $customizations');
+          
+          // Create a new instance of the current product with updated customizations
+          _currentProduct = _currentProduct!.copyWith(
+            customizations: customizations.isEmpty ? null : customizations,
+            updatedAt: DateTime.now(),
+          );
+          
+          print('DEBUG: Updated current product customizations: ${_currentProduct!.customizations}');
+        }
+      } else {
+        print('ERROR: Attempted to remove non-existent customization group at index $index');
+      }
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Customization group removed'),
+        duration: Duration(seconds: 1),
+      ),
+    );
   }
 
   @override
@@ -1136,7 +889,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (_isUploading) ...[
-                    // Image upload progress indicator
                     SizedBox(
                       width: 250,
                       child: Column(
@@ -1168,7 +920,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       ),
                     ),
                   ] else ...[
-                    // Standard loading indicator
                     const CircularProgressIndicator(),
                     const SizedBox(height: 16),
                     Text(
@@ -1186,7 +937,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Product Images Section
                     Text(
                       'Product Images',
                       style: AppTheme.headingMedium(),
@@ -1198,13 +948,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    // Image Gallery
                     SizedBox(
                       height: 120,
                       child: ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
-                          // Add image button
                           InkWell(
                             onTap: _pickImage,
                             child: Container(
@@ -1232,7 +980,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           
-                          // Existing images
                           for (int i = 0; i < _existingImageUrls.length; i++)
                             Stack(
                               children: [
@@ -1263,7 +1010,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                               ],
                             ),
                           
-                          // New images
                           for (int i = 0; i < _newImageFiles.length; i++)
                             Stack(
                               children: [
@@ -1299,7 +1045,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     
                     const SizedBox(height: 24),
                     
-                    // Basic Information
                     Text(
                       'Basic Information',
                       style: AppTheme.headingMedium(),
@@ -1356,7 +1101,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                 if (newValue.text.isEmpty) {
                                   return newValue;
                                 }
-                                // Format the number with thousand separators
                                 final value = int.parse(newValue.text);
                                 final formatted = NumberFormat("#,###", "id_ID").format(value);
                                 return TextEditingValue(
@@ -1386,7 +1130,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     
                     const SizedBox(height: 16),
                     
-                    // Category dropdown
                     DropdownButtonFormField<String>(
                       value: _category,
                       decoration: const InputDecoration(
@@ -1416,7 +1159,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     
                     const SizedBox(height: 24),
                     
-                    // Additional Information
                     Text(
                       'Additional Information',
                       style: AppTheme.headingMedium(),
@@ -1436,17 +1178,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     
                     const SizedBox(height: 24),
                     
-                    // Customization Options
                     Text(
                       'Customization Options',
                       style: AppTheme.headingMedium(),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Add customization options for your product (e.g., size, toppings, spice level)',
-                      style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
-                    ),
-                    const SizedBox(height: 16),
                     
                     _buildCustomizationSection(),
                     
@@ -1492,202 +1228,5 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               ),
             ),
     );
-  }
-
-  // Add a method to run diagnostics
-  Future<void> _runDiagnostics() async {
-    setState(() {
-      _isLoading = true;
-      _uploadStatus = 'Running Firebase diagnostics...';
-    });
-    
-    try {
-      final diagnosticResults = await _productService.runDiagnostics();
-      
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Firebase Diagnostics'),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Overall: ${diagnosticResults['allPassed'] ? '✅ Passed' : '❌ Failed'}'),
-                  const Divider(),
-                  Text('Message: ${diagnosticResults['message']}'),
-                  const Divider(),
-                  const Text('Authentication:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text('Logged in: ${diagnosticResults['auth']['isAuthenticated'] ? '✅ Yes' : '❌ No'}'),
-                  Text('User ID: ${diagnosticResults['auth']['userId']}'),
-                  const Divider(),
-                  const Text('Storage:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text('Can Read: ${diagnosticResults['storage']['canRead'] ? '✅ Yes' : '❌ No'}'),
-                  Text('Can Write: ${diagnosticResults['storage']['canWrite'] ? '✅ Yes' : '❌ No'}'),
-                  if (diagnosticResults['storage']['errors'] != null && 
-                      (diagnosticResults['storage']['errors'] as List).isNotEmpty)
-                    Text('Errors: ${(diagnosticResults['storage']['errors'] as List).join(', ')}'),
-                  const Divider(),
-                  const Text('Firestore:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text('Can Access: ${diagnosticResults['firestore']['canRead'] ? '✅ Yes' : '❌ No'}'),
-                  if (diagnosticResults['firestore']['docExists'] != null)
-                    Text('User Document: ${diagnosticResults['firestore']['docExists'] ? '✅ Exists' : '❌ Missing'}'),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Close'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  // Run a simple upload test
-                  _testSingleImageUpload();
-                },
-                child: const Text('Test Upload'),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error running diagnostics: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-  
-  // Test a single image upload
-  Future<void> _testSingleImageUpload() async {
-    try {
-      // First ensure we have a test image
-      final XFile? pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 70,
-      );
-      
-      if (pickedFile == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No image selected'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-      
-      setState(() {
-        _isLoading = true;
-        _uploadStatus = 'Testing image upload...';
-      });
-      
-      // Create a test file
-      final File testFile = File(pickedFile.path);
-      final fileSize = await testFile.length();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Testing upload of image (${(fileSize / 1024).toStringAsFixed(1)} KB)'),
-          ),
-        );
-      }
-      
-      // Attempt direct upload using the simplified method
-      final String url = await _productService.uploadProductImage(testFile);
-      
-      if (url.contains('placeholder')) {
-        // Upload failed
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Upload test failed: $url'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } else {
-        // Upload succeeded
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Upload test succeeded!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          
-          // Show the image in a dialog
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Upload Successful'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.network(
-                    url,
-                    height: 200,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                              : null,
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Text('Error loading image'),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Text('URL: $url', style: const TextStyle(fontSize: 12)),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Close'),
-                ),
-              ],
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error testing upload: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 } 
