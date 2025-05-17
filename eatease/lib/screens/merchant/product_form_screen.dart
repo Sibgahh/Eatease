@@ -1345,37 +1345,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           
-<<<<<<< Updated upstream
                           // Existing images
-=======
-                          InkWell(
-                            onTap: _toggleAddImageUrl,
-                            child: Container(
-                              width: 100,
-                              margin: const EdgeInsets.only(right: 8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: AppTheme.dividerColor),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.link, 
-                                    size: 40,
-                                    color: AppTheme.primaryColor,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Add URL',
-                                    style: AppTheme.bodyMedium(color: AppTheme.primaryColor),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          
->>>>>>> Stashed changes
                           for (int i = 0; i < _existingImageUrls.length; i++)
                             Stack(
                               children: [
