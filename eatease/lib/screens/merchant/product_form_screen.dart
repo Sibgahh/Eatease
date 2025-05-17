@@ -43,13 +43,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
-<<<<<<< Updated upstream
+  final _imageUrlController = TextEditingController();
   // Removing preparation time controller
   // final _prepTimeController = TextEditingController();
-=======
-  final _imageUrlController = TextEditingController();
-  ProductModel? _currentProduct;
->>>>>>> Stashed changes
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -122,12 +118,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-<<<<<<< Updated upstream
     // Removing preparation time disposal
     // _prepTimeController.dispose();
-=======
-    _imageUrlController.dispose();
->>>>>>> Stashed changes
     super.dispose();
   }
 
@@ -251,8 +243,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     });
 
     try {
+      // Debug print to check image URLs
+      print('Existing image URLs before save: $_existingImageUrls');
+      
       // Upload any new images
       final List<String> allImageUrls = [..._existingImageUrls];
+      
+      // Debug printout to verify URLs are retained
+      print('All image URLs before upload: $allImageUrls');
       
       if (_newImageFiles.isNotEmpty) {
         // First try the diagnostics to see if Firebase Storage is working
@@ -400,6 +398,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   // Continue with product save after images are processed
   Future<void> _continueProductSave(List<String> imageUrls) async {
     try {
+      // Debug print to verify we have all images including URLs
+      print('Image URLs to save: $imageUrls');
+      
       double price = 0;
       
       try {
@@ -419,18 +420,27 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       if (widget.product == null) {
         // Create new product
         try {
+          // Make sure we have at least an empty list for images
+          final List<String> finalImageUrls = imageUrls.isEmpty 
+              ? [] 
+              : imageUrls;
+          
           final newProduct = ProductModel(
             id: const Uuid().v4(), // Will be replaced by Firestore
             merchantId: _productService.currentMerchantId ?? '',
             name: _nameController.text.trim(),
             description: _descriptionController.text.trim(),
             price: price,
-            imageUrls: imageUrls,
+            imageUrls: finalImageUrls,
             isAvailable: _isAvailable,
             category: _category,
             customizations: customizations.isNotEmpty ? customizations : null,
             createdAt: DateTime.now(),
           );
+          
+          // Debug print product before saving
+          print('New product to save: ${newProduct.toString()}');
+          print('Image URLs in new product: ${newProduct.imageUrls}');
 
           await _productService.addProduct(newProduct);
           if (mounted) {
@@ -453,16 +463,25 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       } else {
         // Update existing product
         try {
+          // Make sure we have at least an empty list for images
+          final List<String> finalImageUrls = imageUrls.isEmpty 
+              ? [] 
+              : imageUrls;
+          
           final updatedProduct = widget.product!.copyWith(
             name: _nameController.text.trim(),
             description: _descriptionController.text.trim(),
             price: price,
-            imageUrls: imageUrls,
+            imageUrls: finalImageUrls,
             isAvailable: _isAvailable,
             category: _category,
             customizations: customizations.isNotEmpty ? customizations : null,
             updatedAt: DateTime.now(),
           );
+          
+          // Debug print product before saving
+          print('Updated product to save: ${updatedProduct.toString()}');
+          print('Image URLs in updated product: ${updatedProduct.imageUrls}');
 
           await _productService.updateProduct(widget.product!.id, updatedProduct);
           if (mounted) {
@@ -1143,7 +1162,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     // Check if URL is not empty
     if (url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter an image URL')),
+        const SnackBar(
+          content: Text('Please enter an image URL'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -1152,7 +1174,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     bool isValidUrl = Uri.tryParse(url)?.hasAbsolutePath ?? false;
     if (!isValidUrl) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid URL')),
+        const SnackBar(
+          content: Text('Please enter a valid URL'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -1167,9 +1192,35 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Confirm Image URL'),
-          content: const Text(
-            'The URL you entered does not appear to be a direct image link. '
-            'Are you sure this is a valid image URL?'
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The URL you entered does not appear to be a direct image link. Are you sure this is a valid image URL?',
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.amber.shade800),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'For best results, use a direct link to an image file (ends with .jpg, .png, etc.)',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1192,16 +1243,78 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
   
   void _confirmAddImageUrl(String url) {
+    // Debug print before adding URL
+    print('Adding image URL to _existingImageUrls: $url');
+    print('Current _existingImageUrls before adding: $_existingImageUrls');
+    
     setState(() {
+      // Make sure we're adding to the existing URLs list
+      if (_existingImageUrls.contains(url)) {
+        // Don't add duplicates
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This image URL is already added'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      
       _existingImageUrls.add(url);
       _imageUrlController.clear();
       _isAddingImageUrl = false;
+      _previewImageUrl = null;
+      _previewError = false;
     });
 
+    // Debug print after adding URL
+    print('Updated _existingImageUrls after adding: $_existingImageUrls');
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Image URL added'),
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: const Text('Image URL added successfully'),
+        backgroundColor: Colors.green,
+        action: SnackBarAction(
+          label: 'View',
+          onPressed: () {
+            // Show the image in a dialog
+            showDialog(
+              context: context,
+              builder: (context) => Dialog(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppBar(
+                      title: const Text('Image Preview'),
+                      leading: IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                    Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                              const SizedBox(height: 16),
+                              Text('Error loading image: $error'),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+          textColor: Colors.white,
+        ),
       ),
     );
   }
@@ -1225,15 +1338,185 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       setState(() {
         _previewImageUrl = null;
         _previewError = false;
+        _isLoadingPreview = false;
       });
       return;
     }
     
+    // Reset error state and set loading
     setState(() {
       _isLoadingPreview = true;
       _previewError = false;
       _previewImageUrl = url;
     });
+    
+    // Create a temporary Image widget to test loading
+    final testImage = Image.network(
+      url,
+      key: UniqueKey(),
+    );
+    
+    final imageStream = testImage.image.resolve(const ImageConfiguration());
+    
+    // Listen to the image stream to detect loading success/failure
+    imageStream.addListener(ImageStreamListener(
+      (ImageInfo info, bool synchronousCall) {
+        if (mounted) {
+          setState(() {
+            _isLoadingPreview = false;
+            _previewError = false;
+          });
+        }
+      },
+      onError: (dynamic exception, StackTrace? stackTrace) {
+        if (mounted) {
+          setState(() {
+            _isLoadingPreview = false;
+            _previewError = true;
+          });
+          print('Error loading image preview: $exception');
+        }
+      },
+    ));
+  }
+
+  // Build the URL input section for adding an image by URL
+  Widget _buildUrlInputSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Add Image from URL',
+          style: AppTheme.headingSmall(),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Enter a direct link to an image (JPG, PNG, etc.)',
+          style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _imageUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Image URL',
+                  hintText: 'https://example.com/image.jpg',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.link),
+                ),
+                onChanged: (_) => _loadImagePreview(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: _addImageUrl,
+              child: const Text('Add'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                backgroundColor: AppTheme.primaryColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_previewImageUrl != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Image Preview:',
+                  style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
+                ),
+                const SizedBox(height: 8),
+                _isLoadingPreview
+                    ? Center(
+                        child: Column(
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Loading image...',
+                              style: AppTheme.bodyMedium(),
+                            ),
+                          ],
+                        ))
+                    : _previewError
+                        ? Container(
+                            height: 150,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red, size: 42),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Invalid image URL',
+                                  style: AppTheme.bodyMedium(color: Colors.red),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Please enter a direct link to an image',
+                                  style: AppTheme.bodySmall(color: Colors.red.shade800),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              _previewImageUrl!,
+                              fit: BoxFit.cover,
+                              height: 200,
+                              width: double.infinity,
+                              errorBuilder: (context, error, stackTrace) {
+                                Future.microtask(() {
+                                  setState(() {
+                                    _previewError = true;
+                                  });
+                                });
+                                return Container(
+                                  height: 150,
+                                  color: Colors.grey.shade200,
+                                  child: const Center(
+                                    child: Icon(Icons.error_outline, color: Colors.red, size: 32),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton.icon(
+              icon: const Icon(Icons.close, size: 16),
+              label: const Text('Cancel'),
+              onPressed: _toggleAddImageUrl,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   @override
@@ -1345,6 +1628,34 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ),
                           
+                          // Add from URL button
+                          InkWell(
+                            onTap: _toggleAddImageUrl,
+                            child: Container(
+                              width: 100,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: AppTheme.dividerColor),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.link, 
+                                    size: 40,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Add from URL',
+                                    style: AppTheme.bodyMedium(color: AppTheme.primaryColor),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          
                           // Existing images
                           for (int i = 0; i < _existingImageUrls.length; i++)
                             Stack(
@@ -1427,7 +1738,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     const SizedBox(height: 16),
                     
                     if (_isAddingImageUrl)
-                      _buildUrlInputSection(),
+                      Card(
+                        elevation: 2,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: _buildUrlInputSection(),
+                        ),
+                      ),
                     
                     const SizedBox(height: 24),
                     
@@ -1626,7 +1947,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
-<<<<<<< Updated upstream
   // Add a method to run diagnostics
   Future<void> _runDiagnostics() async {
     setState(() {
@@ -1782,87 +2102,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         child: CircularProgressIndicator(
                           value: loadingProgress.expectedTotalBytes != null
                               ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-=======
-  Widget _buildUrlInputSection() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Enter image URL',
-            style: AppTheme.bodyMedium(color: AppTheme.textSecondaryColor),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _imageUrlController,
-                  decoration: const InputDecoration(
-                    hintText: 'https://example.com/image.jpg',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  keyboardType: TextInputType.url,
-                  onChanged: (_) => _loadImagePreview(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _addImageUrl,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Add'),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: _toggleAddImageUrl,
-              ),
-            ],
-          ),
-          
-          if (_previewImageUrl != null) ...[
-            const SizedBox(height: 16),
-            Center(
-              child: Container(
-                width: 200,
-                height: 150,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    _previewImageUrl!,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) {
-                        // Image has loaded successfully
-                        return child;
-                      }
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded / 
-                                  (loadingProgress.expectedTotalBytes ?? 1)
->>>>>>> Stashed changes
                               : null,
                         ),
                       );
                     },
                     errorBuilder: (context, error, stackTrace) {
-<<<<<<< Updated upstream
                       return const Center(
                         child: Text('Error loading image'),
                       );
@@ -1898,29 +2142,5 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _isLoading = false;
       });
     }
-=======
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.red, size: 32),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Invalid image URL',
-                              style: AppTheme.bodySmall(color: Colors.red),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
->>>>>>> Stashed changes
   }
 } 
